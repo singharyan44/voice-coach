@@ -5,7 +5,7 @@ const { AttemptRecorder } = require('../public/attempt-recorder');
 const { computeMetrics } = require('./metrics');
 const { analyzeAttempt } = require('./analyze');
 const { compareAttempts } = require('./compare');
-const { createSession, getSession, addAttempt } = require('./session');
+const { createSession, getSession, addAttempt, makeAttempt } = require('./session');
 const { pickPrompt, PROMPTS } = require('./prompts');
 const { getProviderConfig } = require('./llm/provider');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
@@ -135,6 +135,10 @@ const ok = (name, cond, extra) => {
   const cmpW = compareAttempts(ia, analyzeAttempt({ metrics: worseM }), ia.retry_focus);
   ok('c regression', cmpW.worse.length > 0, ' worse=' + cmpW.worse.length);
   ok('c regression focus false', cmpW.retry_focus_addressed === false, '');
+  // client-shape previous: light analysis (no metrics inside) + separate metrics
+  const lightPrev = { transcript: 'old words here', metrics: weak, analysis: { strengths: wa.strengths, areas_to_improve: wa.areas_to_improve, retry_focus: wa.retry_focus } };
+  const cmpLight = compareAttempts({ ...lightPrev.analysis, metrics: lightPrev.metrics }, ia, lightPrev.analysis.retry_focus);
+  ok('c light-shape previous', cmpLight.improved.some((i) => i.metric === 'fillerRatePer100'), '');
 }
 
 // ---------- session ----------
@@ -147,6 +151,8 @@ const ok = (name, cond, extra) => {
   ok('s numbering', a1.n === 1 && a2.n === 2);
   ok('s count', getSession(s.id).attempts.length === 2);
   ok('s unknown', getSession('nope') === null && addAttempt('nope', {}) === null);
+  const stateless = makeAttempt(2, { transcript: 'hi there', durationMs: 1000, turnCount: 1, metrics: { wordCount: 2 }, analysis: { retry_focus: null } });
+  ok('s stateless numbering', stateless.n === 2 && stateless.transcript === 'hi there' && !!stateless.id && !!stateless.createdAt, '');
 }
 
 console.log('RESULT pass=' + pass + ' fail=' + fail);

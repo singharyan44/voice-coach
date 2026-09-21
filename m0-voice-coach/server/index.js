@@ -2,7 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const path = require('path');
 const { pickPrompt } = require('../coach/prompts');
-const { createSession, getSession, addAttempt } = require('../coach/session');
+const { createSession, getSession, addAttempt, makeAttempt } = require('../coach/session');
 const { computeMetrics } = require('../coach/metrics');
 const { analyzeAttempt } = require('../coach/analyze');
 const { analyzeWithLLM } = require('../coach/llm-analyze');
@@ -82,9 +82,13 @@ app.post('/api/sessions', (req, res) => {
 });
 
 // Submit a finalized attempt: joined finalized Turns + client-measured timing.
+//
+// Stateless by design: serverless hosts don't share memory between requests,
+// so the session is OPTIONAL. The client sends `previous` (its last attempt)
+// on retries; the server numbers from it and returns the comparison inline.
+// When a live session exists (local dev) the attempt is also stored there.
 app.post('/api/sessions/:id/attempts', async (req, res) => {
   const session = getSession(req.params.id);
-  if (!session) return res.status(404).json({ error: 'Unknown session. Start a new practice session.' });
 
   const transcript = ((req.body && req.body.transcript) || '').trim();
   if (!transcript) return res.status(400).json({ error: 'Empty transcript — speak before finishing the attempt.' });
@@ -97,26 +101,45 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
     turnCount: Number.isFinite(turnCount) && turnCount >= 0 ? turnCount : 0,
   });
 
+  // Retry context: prefer the client-sent previous (works across serverless
+  // instances), fall back to the in-memory session (local dev).
+  const bodyPrev = req.body && req.body.previous;
+  let prev = null;
+  if (bodyPrev && typeof bodyPrev.transcript === 'string' && bodyPrev.transcript.trim() && bodyPrev.analysis && bodyPrev.metrics) {
+    prev = {
+      n: Number.isFinite(bodyPrev.n) ? Math.floor(bodyPrev.n) : 1,
+      transcript: bodyPrev.transcript,
+      metrics: bodyPrev.metrics,
+      analysis: {
+        strengths: bodyPrev.analysis.strengths || [],
+        areas_to_improve: bodyPrev.analysis.areas_to_improve || [],
+        retry_focus: bodyPrev.analysis.retry_focus || null,
+      },
+    };
+  } else if (session && session.attempts.length > 0) {
+    const last = session.attempts[session.attempts.length - 1];
+    prev = {
+      n: last.n,
+      transcript: last.transcript,
+      metrics: last.metrics,
+      analysis: {
+        strengths: last.analysis.strengths,
+        areas_to_improve: last.analysis.areas_to_improve,
+        retry_focus: last.analysis.retry_focus,
+      },
+    };
+  }
+
   // Coach engine selected in the UI ('ai' default). Rules never touches the
   // LLM; AI falls back to rules on any provider failure. compare.js stays
   // deterministic either way.
   const requestedEngine = req.body && req.body.coachEngine === 'rules' ? 'rules' : 'ai';
-  const prev = session.attempts.length > 0 ? session.attempts[session.attempts.length - 1] : null;
-  const previous = prev ? {
-    transcript: prev.transcript,
-    metrics: prev.metrics,
-    analysis: {
-      strengths: prev.analysis.strengths,
-      areas_to_improve: prev.analysis.areas_to_improve,
-      retry_focus: prev.analysis.retry_focus,
-    },
-  } : null;
   const routed = await analyzeAttemptForSession({
     engine: requestedEngine,
-    prompt: session.prompt,
+    prompt: session ? session.prompt : { title: 'Practice', objective: '' },
     transcript,
     metrics,
-    previous,
+    previous: prev,
     llmAnalyze: analyzeWithLLM,
     rulesAnalyze: analyzeAttempt,
   });
@@ -127,8 +150,20 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
   const analysis = routed.analysis;
   const coachSource = routed.coachSource;
 
-  const attempt = addAttempt(session.id, { transcript, durationMs: metrics.durationSec * 1000, turnCount: metrics.turnCount, metrics, analysis });
-  res.json({ attempt, analysis, coachSource, requestedEngine: routed.requested });
+  const n = prev ? prev.n + 1 : 1;
+  const attempt = session
+    ? addAttempt(session.id, { transcript, durationMs: metrics.durationSec * 1000, turnCount: metrics.turnCount, metrics, analysis }) || makeAttempt(n, { transcript, durationMs: metrics.durationSec * 1000, turnCount: metrics.turnCount, metrics, analysis })
+    : makeAttempt(n, { transcript, durationMs: metrics.durationSec * 1000, turnCount: metrics.turnCount, metrics, analysis });
+
+  // Comparison rides along with attempt 2+ so retries need no extra round
+  // trip and no shared server memory. prev.analysis travels light (no
+  // metrics inside), so reattach prev.metrics before comparing.
+  let comparison = null;
+  if (prev && prev.metrics && prev.analysis && prev.analysis.retry_focus) {
+    comparison = compareAttempts({ ...prev.analysis, metrics: prev.metrics }, analysis, prev.analysis.retry_focus);
+  }
+
+  res.json({ attempt, analysis, coachSource, requestedEngine: routed.requested, comparison });
 });
 
 // Compare the last two attempts of a session.

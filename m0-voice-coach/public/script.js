@@ -275,6 +275,9 @@ window.addEventListener('pagehide', () => {
 let sessionId = null;
 let currentPromptId = null;
 let attemptCount = 0;
+// Last completed attempt, kept client-side so retries work even when the
+// server keeps no memory (serverless hosts). Sent back as `previous`.
+let lastAttempt = null;
 const recorder = new AttemptRecorder();
 
 const promptTitleEl = document.getElementById('promptTitle');
@@ -313,18 +316,31 @@ async function playSample(url, label) {
   sampleStreaming = true;
   updateSampleButtons();
   updateAttemptButtons();
+  // Pause mic capture while the sample plays: otherwise the mic re-captures
+  // the speaker output and AssemblyAI receives everything twice. The mic
+  // worklet keeps running; only its input is detached, then re-attached.
+  let micPaused = false;
   try {
     if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
     await audioCtx.resume().catch(() => {});
+    if (source && worklet) {
+      source.disconnect();
+      micPaused = true;
+    }
     await streamSampleFile({
       url,
       audioCtx,
       ws,
-      onStatus: (t) => { sampleHintEl.textContent = t; log('Sample: ' + t); },
+      monitor: true,
+      onStatus: (t) => { sampleHintEl.textContent = t + ' (you should hear it; mic is paused)'; log('Sample: ' + t); },
     });
   } catch (e) {
     sampleHintEl.textContent = 'Sample failed: ' + e.message;
     log('Sample error: ' + e.message);
+  } finally {
+    if (micPaused && source && worklet) {
+      try { source.connect(worklet); } catch (e) { log('Mic resume error: ' + e.message); }
+    }
   }
   sampleStreaming = false;
   updateSampleButtons();
@@ -386,6 +402,7 @@ async function newSession(excludePromptId) {
   promptObjectiveEl.textContent = data.prompt.objective;
   attemptCount = 0;
   attemptNumEl.textContent = '1';
+  lastAttempt = null;
   recorder.resetToIdle();
   setAttemptState('Ready', false);
   feedbackBox.innerHTML = '';
@@ -466,16 +483,29 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     const res = await fetch('/api/sessions/' + sessionId + '/attempts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine }),
+      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine, previous: lastAttempt }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('Attempt request returned ' + res.status));
     attemptCount = data.attempt.n;
     attemptNumEl.textContent = String(attemptCount + 1);
+    lastAttempt = {
+      n: data.attempt.n,
+      transcript,
+      metrics: data.analysis.metrics,
+      analysis: {
+        strengths: data.analysis.strengths,
+        areas_to_improve: data.analysis.areas_to_improve,
+        retry_focus: data.analysis.retry_focus,
+      },
+    };
     renderAnalysis(data.analysis, data.attempt, data.coachSource, data.requestedEngine || coachEngine);
-    setAttemptState('Feedback — press Try again', false);
     attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
-    if (attemptCount >= 2) await loadComparison();
+    if (data.comparison) {
+      renderComparisonData(data.comparison);
+    } else if (attemptCount >= 2) {
+      await loadComparison();
+    }
   } catch (e) {
     attemptHintEl.textContent = 'Analysis failed: ' + e.message;
     log('Attempt submit failed: ' + e.message);
@@ -538,6 +568,14 @@ async function loadComparison() {
     const res = await fetch('/api/sessions/' + sessionId + '/comparison');
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('Comparison request returned ' + res.status));
+    renderComparisonData(data);
+    log('Comparison rendered');
+  } catch (e) {
+    log('Comparison failed: ' + e.message);
+  }
+}
+
+function renderComparisonData(data) {
     document.getElementById('cmpPrev').textContent = String(attemptCount - 1);
     document.getElementById('cmpCurr').textContent = String(attemptCount);
     const sec = (title, items, cls) => items.length
@@ -556,9 +594,6 @@ async function loadComparison() {
     comparisonPanel.hidden = false;
     setAttemptState('Comparison', false);
     log('Comparison rendered');
-  } catch (e) {
-    log('Comparison failed: ' + e.message);
-  }
 }
 
 initSession();

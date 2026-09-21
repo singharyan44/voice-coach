@@ -31,7 +31,7 @@ function chunkPCM16(int16, chunkSize, minSize) {
   return { chunks, tail };
 }
 
-async function streamSampleFile({ url, audioCtx, ws, chunkSize, intervalMs, onStatus, isOpen }) {
+async function streamSampleFile({ url, audioCtx, ws, chunkSize, intervalMs, onStatus, isOpen, monitor }) {
   const size = chunkSize || 1600;
   const gap = intervalMs || 100;
   const open = isOpen || (() => ws && ws.readyState === WebSocket.OPEN);
@@ -59,9 +59,20 @@ async function streamSampleFile({ url, audioCtx, ws, chunkSize, intervalMs, onSt
   }
   const { chunks, tail } = chunkPCM16(pcm16, size);
 
+  // Optional monitor: play the clip through the speakers as it streams, so
+  // hands-free testing is audible. The caller is responsible for pausing mic
+  // capture meanwhile (see playSample) to avoid double-feeding AssemblyAI.
+  let monitorSrc = null;
+  if (monitor) {
+    monitorSrc = audioCtx.createBufferSource();
+    monitorSrc.buffer = decoded;
+    monitorSrc.connect(audioCtx.destination);
+  }
+
   let i = 0;
   let stopped = false;
   onStatus && onStatus('Streaming sample… (' + (chunks.length * size / targetRate).toFixed(0) + 's)');
+  if (monitorSrc) { try { monitorSrc.start(); } catch (e) { /* ignore */ } }
   await new Promise((resolve) => {
     const sendNext = () => {
       if (stopped || !open()) { resolve(); return; }
@@ -75,7 +86,10 @@ async function streamSampleFile({ url, audioCtx, ws, chunkSize, intervalMs, onSt
   const droppedMs = tail > 0 ? Math.round((tail / targetRate) * 1000) : 0;
   onStatus && onStatus('Sample finished.' + (droppedMs ? ' (dropped ' + droppedMs + ' ms trailing tail — below the 50 ms minimum)' : ''));
   return {
-    stop() { stopped = true; },
+    stop() {
+      stopped = true;
+      try { monitorSrc && monitorSrc.stop(); } catch (e) { /* already stopped */ }
+    },
     chunksSent: i,
     droppedTailSamples: tail,
   };

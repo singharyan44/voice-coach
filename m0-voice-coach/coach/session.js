@@ -12,6 +12,23 @@ function makeId(prefix) {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+// Build an attempt object without touching the store. Serverless hosts
+// (Vercel) don't share memory between requests, so attempts must also work
+// statelessly: the client sends the previous attempt, the server numbers the
+// new one from it and returns the comparison inline.
+function makeAttempt(n, { transcript, durationMs, turnCount, metrics, analysis }) {
+  return {
+    n,
+    id: makeId('a'),
+    transcript,
+    durationMs,
+    turnCount,
+    metrics,
+    analysis,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function createSession(prompt) {
   const session = {
     id: makeId('s'),
@@ -30,18 +47,9 @@ function getSession(id) {
 function addAttempt(sessionId, { transcript, durationMs, turnCount, metrics, analysis }) {
   const session = getSession(sessionId);
   if (!session) return null;
-  const attempt = {
-    n: session.attempts.length + 1,
-    id: makeId('a'),
-    transcript,
-    durationMs,
-    turnCount,
-    metrics,
-    analysis,
-    createdAt: new Date().toISOString(),
-  };
+  const attempt = makeAttempt(session.attempts.length + 1, { transcript, durationMs, turnCount, metrics, analysis });
   session.attempts.push(attempt);
   return attempt;
 }
 
-module.exports = { createSession, getSession, addAttempt };
+module.exports = { createSession, getSession, addAttempt, makeAttempt };

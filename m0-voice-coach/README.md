@@ -54,11 +54,17 @@ are test fixtures only — no mic audio is replaced in normal use.
 - Attempt comparison with noise bands (tiny wobbles report "same")
 - Clean disconnect sends `{"type":"Terminate"}` to close the session
 
-## Coaching API
+## Coaching API (stateless — safe on serverless hosts)
+
+Each request carries everything it needs; the server keeps memory only as a
+local-dev convenience:
 
 - `POST /api/sessions` → `{ sessionId, prompt }`
-- `POST /api/sessions/:id/attempts` → `{ attempt, analysis, coachSource }`
-- `GET /api/sessions/:id/comparison` → `{ improved, same, worse, retry_focus_addressed, next_focus }`
+- `POST /api/sessions/:id/attempts` `{ transcript, durationMs, turnCount, coachEngine, previous? }`
+  → `{ attempt, analysis, coachSource, requestedEngine, comparison? }`
+  (`comparison` is included inline from attempt 2 on; `previous` is the last
+  attempt the browser already holds, so retries survive across instances)
+- `GET /api/sessions/:id/comparison` → same comparison (local-dev fallback)
 
 ## LLM coaching (optional)
 
