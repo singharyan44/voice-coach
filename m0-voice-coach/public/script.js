@@ -290,6 +290,49 @@ const comparisonPanel = document.getElementById('comparisonPanel');
 const comparisonBox = document.getElementById('comparisonBox');
 const attemptStateEl = document.getElementById('attemptState');
 const healthLineEl = document.getElementById('healthLine');
+const sampleABtn = document.getElementById('sampleABtn');
+const sampleBBtn = document.getElementById('sampleBBtn');
+const sampleHintEl = document.getElementById('sampleHint');
+let sampleStreaming = false;
+
+function updateSampleButtons() {
+  const connected = ws && ws.readyState === WebSocket.OPEN;
+  sampleABtn.disabled = !connected || sampleStreaming;
+  sampleBBtn.disabled = !connected || sampleStreaming;
+}
+
+async function playSample(url, label) {
+  if (sampleStreaming) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    sampleHintEl.textContent = 'Connect first, then play a sample.';
+    return;
+  }
+  if (!recorder.isRecording() && !recorder.isFinishing()) {
+    sampleHintEl.textContent = 'Press “Start attempt” first — then play ' + label + ' so it counts toward the attempt.';
+  }
+  sampleStreaming = true;
+  updateSampleButtons();
+  updateAttemptButtons();
+  try {
+    if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
+    await audioCtx.resume().catch(() => {});
+    await streamSampleFile({
+      url,
+      audioCtx,
+      ws,
+      onStatus: (t) => { sampleHintEl.textContent = t; log('Sample: ' + t); },
+    });
+  } catch (e) {
+    sampleHintEl.textContent = 'Sample failed: ' + e.message;
+    log('Sample error: ' + e.message);
+  }
+  sampleStreaming = false;
+  updateSampleButtons();
+  updateAttemptButtons();
+}
+
+sampleABtn.addEventListener('click', () => playSample('samples/sample-a-weak-16k.wav', 'Sample 1'));
+sampleBBtn.addEventListener('click', () => playSample('samples/sample-b-clean-16k.wav', 'Sample 2'));
 
 async function checkHealth() {
   try {
@@ -378,11 +421,11 @@ function updateAttemptButtons() {
   engineRadios().forEach((r) => { r.disabled = busy; });
 }
 
-// Keep attempt buttons in sync with connection state.
+// Keep attempt + sample buttons in sync with connection state.
 const _setStatusForM1 = setStatus;
 setStatus = function (text, color) {
   _setStatusForM1(text, color);
-  try { updateAttemptButtons(); } catch (e) { /* UI not ready yet */ }
+  try { updateAttemptButtons(); updateSampleButtons(); } catch (e) { /* UI not ready yet */ }
 };
 
 startAttemptBtn.addEventListener('click', () => {
@@ -520,3 +563,4 @@ async function loadComparison() {
 
 initSession();
 checkHealth();
+updateSampleButtons();

@@ -40,6 +40,15 @@
       <div id="attemptHint" class="hint">Connect, then press “Start attempt” and speak.</div>
     </section>
 
+    <section class="panel">
+      <h2>Test samples <span class="hint">no mic needed</span></h2>
+      <div class="row">
+        <button id="sampleABtn" class="btn btn-small">▶ Sample 1 (filler-heavy)</button>
+        <button id="sampleBBtn" class="btn btn-small">▶ Sample 2 (clean retry)</button>
+      </div>
+      <div id="sampleHint" class="hint">Connect + Start attempt first, then play a sample — it streams through the same voice pipeline as your mic.</div>
+    </section>
+
     <div class="panels">
       <section class="panel">
         <h2>Live transcript</h2>
@@ -60,6 +69,7 @@
   </div>
 
   <script src="attempt-recorder.js"></script>
+  <script src="sample-player.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

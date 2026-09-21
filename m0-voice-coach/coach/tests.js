@@ -11,6 +11,7 @@ const { getProviderConfig } = require('./llm/provider');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
 const { analyzeAttemptForSession } = require('./coach-engine');
 const { buildHealth } = require('./health');
+const { chunkPCM16 } = require('../public/sample-player');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -264,5 +265,21 @@ if (fail) process.exit(1);
   ok('health no secrets', !JSON.stringify(buildHealth({ ASSEMBLYAI_API_KEY: 'sekret-key', GROQ_API_KEY: 'sekret-g' })).includes('sekret'), '');
 
   console.log('HEALTH-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- sample chunking (50–1000 ms rule) ----------
+  {
+    const exact = chunkPCM16(new Int16Array(4800), 1600);
+    ok('chunk exact', exact.chunks.length === 3 && exact.chunks.every((c) => c.length === 1600) && exact.tail === 0, '');
+    const withValidTail = chunkPCM16(new Int16Array(4800 + 1000), 1600);
+    ok('chunk valid tail sent', withValidTail.chunks.length === 4 && withValidTail.chunks[3].length === 1000 && withValidTail.tail === 0, '');
+    const withShortTail = chunkPCM16(new Int16Array(4800 + 799), 1600);
+    ok('chunk short tail held', withShortTail.chunks.length === 3 && withShortTail.tail === 799, '');
+    const tiny = chunkPCM16(new Int16Array(100), 1600);
+    ok('chunk tiny held', tiny.chunks.length === 0 && tiny.tail === 100, '');
+    const boundary = chunkPCM16(new Int16Array(1600 + 800), 1600);
+    ok('chunk 50ms boundary', boundary.chunks.length === 2 && boundary.tail === 0, '');
+  }
+
+  console.log('SAMPLE-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

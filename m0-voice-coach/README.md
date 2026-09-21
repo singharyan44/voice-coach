@@ -29,6 +29,20 @@ Open http://localhost:3000 (Chrome or Edge recommended).
 7. Read the comparison: what improved, what stayed the same, what got worse,
    and what to focus on next.
 
+## Hands-free testing (no mic needed)
+
+The **Test samples** panel streams pre-generated speech clips through the same
+voice pipeline as your microphone — same WebSocket, same Turns, same analysis:
+
+1. Connect, then press **Start attempt**.
+2. Press **▶ Sample 1** (filler-heavy speech) or **▶ Sample 2** (clean retry).
+3. Wait for the final transcript, press **Finish attempt**.
+4. Use Sample 1 as attempt 1 and Sample 2 as attempt 2 to exercise the full
+   Practice → Feedback → Retry → Comparison loop without speaking.
+
+The clips (`public/samples/`, 16 kHz mono WAV, generated with Windows TTS)
+are test fixtures only — no mic audio is replaced in normal use.
+
 ## What it does
 
 - Temporary streaming token from `/token` (API key stays server-side)
