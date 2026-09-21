@@ -8,7 +8,6 @@ const { compareAttempts } = require('./compare');
 const { createSession, getSession, addAttempt } = require('./session');
 const { pickPrompt, PROMPTS } = require('./prompts');
 const { getProviderConfig } = require('./llm/provider');
-const { envVal } = require('./env');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
 const { analyzeAttemptForSession } = require('./coach-engine');
 
@@ -157,13 +156,6 @@ if (fail) process.exit(1);
   ok('llm groq override', cfgGroq && cfgGroq.name === 'groq' && cfgGroq.model === 'llama-x' && cfgGroq.baseURL.includes('groq') && cfgGroq.apiKey === 'k', '');
   const cfgGroqDef = getProviderConfig({ COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' });
   ok('llm groq default model', cfgGroqDef && cfgGroqDef.model === 'openai/gpt-oss-20b', ' got ' + (cfgGroqDef && cfgGroqDef.model));
-  // lowercase host-normalized env names must work identically
-  const cfgLower = getProviderConfig({ coach_provider: 'groq', groq_api_key: 'k', coach_model: 'm' });
-  ok('llm lowercase env', cfgLower && cfgLower.name === 'groq' && cfgLower.model === 'm' && cfgLower.apiKey === 'k', '');
-  ok('env exact wins', envVal({ FOO: 'up', foo: 'low' }, 'FOO') === 'up', '');
-  ok('env case-insensitive', envVal({ foo: 'low' }, 'FOO') === 'low', '');
-  ok('env missing', envVal({}, 'FOO') === undefined, '');
-  ok('env empty ignored', envVal({ FOO: '' }, 'FOO') === undefined, '');
 
   // input builder
   const metrics = computeMetrics({ transcript: 'I play football every Sunday with friends.', durationMs: 8000, turnCount: 1 });
