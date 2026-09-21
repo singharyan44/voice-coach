@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const express = require('express');
 const path = require('path');
 const { pickPrompt } = require('../coach/prompts');
+const { envVal } = require('../coach/env');
 const { createSession, getSession, addAttempt } = require('../coach/session');
 const { computeMetrics } = require('../coach/metrics');
 const { analyzeAttempt } = require('../coach/analyze');
@@ -11,8 +12,8 @@ const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const API_KEY = process.env.ASSEMBLYAI_API_KEY;
+const PORT = envVal(process.env, 'PORT') || 3000;
+const API_KEY = envVal(process.env, 'ASSEMBLYAI_API_KEY');
 
 if (!API_KEY) {
   console.error('Missing ASSEMBLYAI_API_KEY. Copy .env.example to .env and set your key.');

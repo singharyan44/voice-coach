@@ -8,6 +8,8 @@
 //   OPENROUTER_API_KEY=...
 //   GROQ_API_KEY=...
 
+const { envVal } = require('../env');
+
 const PROVIDERS = {
   openrouter: {
     baseURL: 'https://openrouter.ai/api/v1',
@@ -23,12 +25,12 @@ const PROVIDERS = {
 
 function getProviderConfig(env) {
   const e = env || process.env;
-  const name = String(e.COACH_PROVIDER || 'openrouter').toLowerCase();
+  const name = String(envVal(e, 'COACH_PROVIDER') || 'openrouter').toLowerCase();
   const def = PROVIDERS[name];
   if (!def) return { error: `Unknown COACH_PROVIDER "${name}". Use "openrouter" or "groq".` };
-  const apiKey = e[def.keyEnv];
+  const apiKey = envVal(e, def.keyEnv);
   if (!apiKey) return null; // not configured → caller uses deterministic fallback
-  const model = e.COACH_MODEL || def.defaultModel;
+  const model = envVal(e, 'COACH_MODEL') || def.defaultModel;
   return { name, baseURL: def.baseURL, apiKey, model };
 }
 
