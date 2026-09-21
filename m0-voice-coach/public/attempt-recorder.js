@@ -50,6 +50,7 @@ class AttemptRecorder {
 
   isRecording() { return this.state === 'recording'; }
   isFinishing() { return this.state === 'finishing'; }
+  isIdle() { return this.state === 'idle'; }
 
   _acceptOrder(order) {
     return order == null || order > this.maxIdleOrder;

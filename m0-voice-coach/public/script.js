@@ -118,7 +118,14 @@ function handleMessage(data) {
       userBox.textContent = transcript;
       log('Final: ' + transcript);
       const done = recorder.onTurn({ text: transcript, final: true, order });
-      if (done) submitFinishedAttempt(done);
+      if (done) {
+        submitFinishedAttempt(done);
+      } else if (recorder.isIdle() && attemptCount === 0 && transcript) {
+        // Heard speech outside any attempt: teach the ordering now, while the
+        // transcript is on screen — otherwise Finish later finds nothing.
+        const heard = transcript.length > 60 ? transcript.slice(0, 60) + '…' : transcript;
+        attemptHintEl.textContent = 'Heard “' + heard + '” — press “Start attempt” BEFORE speaking to record it.';
+      }
     } else {
       recorder.onTurn({ text: transcript, final: false, order });
       userBox.textContent = transcript;
@@ -402,7 +409,7 @@ finishAttemptBtn.addEventListener('click', () => {
     attemptHintEl.textContent = 'Finishing… waiting for the final transcript, then analyzing.';
     log('Finish clicked — waiting for end-of-turn boundary');
   } else if (r.status === 'empty') {
-    attemptHintEl.textContent = 'No speech captured — press “Start attempt” and try again.';
+    attemptHintEl.textContent = 'No speech recorded — press “Start attempt” first, then speak while it shows Recording.';
     log('Finish with empty transcript; attempt not submitted');
   }
   // 'duplicate'/'invalid' are safely ignored: no double submit.

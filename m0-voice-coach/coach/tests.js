@@ -87,6 +87,10 @@ const ok = (name, cond, extra) => {
   const r2 = new AttemptRecorder();
   r2.start(0);
   ok('race6 silent finish empty', r2.finish(500).status === 'empty');
+  const r3 = new AttemptRecorder();
+  ok('idle fresh', r3.isIdle() && !r3.isRecording() && !r3.isFinishing(), '');
+  r3.start(0);
+  ok('idle false when recording', !r3.isIdle() && r3.isRecording(), '');
 }
 
 // ---------- metrics ----------
