@@ -8,6 +8,7 @@ const { analyzeAttempt } = require('../coach/analyze');
 const { analyzeWithLLM } = require('../coach/llm-analyze');
 const { getProviderConfig } = require('../coach/llm/provider');
 const { analyzeAttemptForSession } = require('../coach/coach-engine');
+const { buildHealth } = require('../coach/health');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -64,6 +65,13 @@ if (require.main === module) {
 module.exports = app;
 
 // ---------------- M1 coaching API (additive; /token + static untouched) ----------------
+
+// Deployment self-check: which backends are configured (presence only,
+// never key values). The UI shows this on load so a missing key explains
+// itself instead of surfacing later as a cryptic token/analysis error.
+app.get('/api/health', (req, res) => {
+  res.json(buildHealth());
+});
 
 // Start a practice session with a prompt.
 app.post('/api/sessions', (req, res) => {

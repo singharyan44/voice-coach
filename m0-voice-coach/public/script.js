@@ -36,7 +36,12 @@ btn.addEventListener('click', async () => {
     setStatus('Fetching token...', '#f59e0b');
 
     const tokenRes = await fetch('/token');
-    if (!tokenRes.ok) throw new Error('Token endpoint returned ' + tokenRes.status);
+    if (!tokenRes.ok) {
+      if (tokenRes.status === 401) {
+        throw new Error('Token endpoint returned 401 — the server key was rejected. Check ASSEMBLYAI_API_KEY in the hosting env, then redeploy.');
+      }
+      throw new Error('Token endpoint returned ' + tokenRes.status);
+    }
     const { token } = await tokenRes.json();
 
     setStatus('Opening WebSocket...', '#f59e0b');
@@ -277,6 +282,24 @@ const feedbackBox = document.getElementById('agentTranscript');
 const comparisonPanel = document.getElementById('comparisonPanel');
 const comparisonBox = document.getElementById('comparisonBox');
 const attemptStateEl = document.getElementById('attemptState');
+const healthLineEl = document.getElementById('healthLine');
+
+async function checkHealth() {
+  try {
+    const res = await fetch('/api/health');
+    if (!res.ok) throw new Error('health returned ' + res.status);
+    const h = await res.json();
+    const speech = h.speech === 'ready' ? 'Speech ready' : 'Speech unavailable (server key missing)';
+    const coach = h.coach === 'rules' ? 'Coach Rules' : 'Coach AI (' + h.coach.slice(3) + ')';
+    healthLineEl.textContent = 'System: ' + speech + ' · ' + coach;
+    if (h.speech !== 'ready') {
+      log('Health: ASSEMBLYAI_API_KEY missing on server — Connect will fail with 401.');
+    }
+  } catch (e) {
+    healthLineEl.textContent = 'System: status unknown (could not reach server).';
+    log('Health check failed: ' + e.message);
+  }
+}
 
 function setAttemptState(text, active) {
   attemptStateEl.textContent = text;
@@ -489,3 +512,4 @@ async function loadComparison() {
 }
 
 initSession();
+checkHealth();

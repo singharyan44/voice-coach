@@ -10,6 +10,7 @@ const { pickPrompt, PROMPTS } = require('./prompts');
 const { getProviderConfig } = require('./llm/provider');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
 const { analyzeAttemptForSession } = require('./coach-engine');
+const { buildHealth } = require('./health');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -248,5 +249,16 @@ if (fail) process.exit(1);
   ok('engine ai failure falls back', rFail.coachSource === 'rules' && rFail.fallback === true && rFail.analysis === fakeRules && rFail.requested === 'ai', '');
 
   console.log('ENGINE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- deployment health checks ----------
+  const hFull = buildHealth({ ASSEMBLYAI_API_KEY: 'k', COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k', COACH_MODEL: 'm' });
+  ok('health full', hFull.ok === true && hFull.speech === 'ready' && hFull.coach === 'ai-groq' && hFull.coachModel === 'm', '');
+  const hRules = buildHealth({ ASSEMBLYAI_API_KEY: 'k' });
+  ok('health rules', hRules.ok === true && hRules.coach === 'rules' && hRules.coachModel === null, '');
+  const hNone = buildHealth({});
+  ok('health missing', hNone.ok === false && hNone.speech === 'missing-key' && hNone.coach === 'rules', '');
+  ok('health no secrets', !JSON.stringify(buildHealth({ ASSEMBLYAI_API_KEY: 'sekret-key', GROQ_API_KEY: 'sekret-g' })).includes('sekret'), '');
+
+  console.log('HEALTH-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });
