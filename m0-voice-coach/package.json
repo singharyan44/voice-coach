@@ -1,0 +1,14 @@
+{
+  "name": "voice-coach-m0",
+  "version": "0.0.1",
+  "description": "M1: speech coach loop (prompt -> speak -> transcript -> feedback -> retry -> comparison) over AssemblyAI Universal-3.5 Pro Streaming",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "dotenv": "^16.4.5"
+  }
+}

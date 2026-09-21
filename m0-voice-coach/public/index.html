@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Coach — Speech Coach</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Voice Coach <span class="mode-label">Speech Coach</span></h1>
+    <p class="subtitle">Practice → Speak → Feedback → Retry → Improve</p>
+
+    <div class="status-bar" id="status">Disconnected</div>
+
+    <button id="connectBtn" class="btn">Connect</button>
+
+    <section class="panel prompt-panel">
+      <h2>Practice prompt</h2>
+      <div id="promptTitle" class="prompt-title">Loading prompt…</div>
+      <div id="promptObjective" class="prompt-objective"></div>
+      <div class="row">
+        <button id="newPromptBtn" class="btn btn-small">New prompt</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Attempt <span id="attemptNum">1</span> <span id="attemptState" class="state-pill">Ready</span></h2>
+      <div class="row engine-row">
+        <span class="engine-label">Coach Engine</span>
+        <label class="engine-option"><input type="radio" name="coachEngine" value="ai" checked> AI Coach</label>
+        <label class="engine-option"><input type="radio" name="coachEngine" value="rules"> Rules Coach</label>
+      </div>
+      <div class="row">
+        <button id="startAttemptBtn" class="btn btn-small">Start attempt</button>
+        <button id="finishAttemptBtn" class="btn btn-small" disabled>Finish attempt</button>
+        <button id="retryBtn" class="btn btn-small" disabled>Try again</button>
+      </div>
+      <div id="attemptHint" class="hint">Connect, then press “Start attempt” and speak.</div>
+    </section>
+
+    <div class="panels">
+      <section class="panel">
+        <h2>Live transcript</h2>
+        <div id="userTranscript" class="transcript-box"></div>
+      </section>
+      <section class="panel">
+        <h2>Coaching feedback</h2>
+        <div id="agentTranscript" class="transcript-box"></div>
+      </section>
+    </div>
+
+    <section class="panel" id="comparisonPanel" hidden>
+      <h2>Comparison — attempt <span id="cmpPrev">1</span> vs <span id="cmpCurr">2</span></h2>
+      <div id="comparisonBox"></div>
+    </section>
+
+    <div id="log" class="log"></div>
+  </div>
+
+  <script src="attempt-recorder.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

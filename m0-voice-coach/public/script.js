@@ -1,0 +1,491 @@
+let ws = null;
+let audioCtx = null;
+let stream = null;
+let worklet = null;
+let source = null;
+
+const btn = document.getElementById('connectBtn');
+const statusEl = document.getElementById('status');
+const userBox = document.getElementById('userTranscript');
+const agentBox = document.getElementById('agentTranscript');
+const logEl = document.getElementById('log');
+
+function log(msg) {
+  const line = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  console.log(line);
+  logEl.textContent += line + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(text, color = '#cbd5e1') {
+  statusEl.textContent = text;
+  statusEl.style.background = color === '#22d3ee' ? '#22d3ee20' : '#334155';
+  statusEl.style.color = color;
+  statusEl.style.borderColor = color + '33';
+}
+
+btn.addEventListener('click', async () => {
+  try {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      endSession();
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+    setStatus('Fetching token...', '#f59e0b');
+
+    const tokenRes = await fetch('/token');
+    if (!tokenRes.ok) throw new Error('Token endpoint returned ' + tokenRes.status);
+    const { token } = await tokenRes.json();
+
+    setStatus('Opening WebSocket...', '#f59e0b');
+    log('Token acquired');
+
+    // Universal-3 Pro Streaming WebSocket endpoint
+    const url = new URL('wss://streaming.assemblyai.com/v3/ws');
+    url.searchParams.set('token', token);
+    url.searchParams.set('speech_model', 'universal-3-5-pro');
+    url.searchParams.set('encoding', 'pcm_s16le');
+    url.searchParams.set('sample_rate', '16000');
+    url.searchParams.set('include_partial_turns', 'true');
+    url.searchParams.set('language_codes', '["en"]');
+
+    ws = new WebSocket(url);
+    ws.binaryType = 'arraybuffer';
+
+    ws.addEventListener('open', () => {
+      log('WebSocket open — session starting');
+      setStatus('Connected — speak now', '#22d3ee');
+      btn.textContent = 'Disconnect';
+      btn.disabled = false;
+      // A fresh streaming session cannot deliver finals for a previous
+      // attempt's wait: drop a stranded "finishing" state on reconnect.
+      if (recorder.isFinishing()) {
+        recorder.resetToIdle();
+        setAttemptState('Ready', false);
+        attemptHintEl.textContent = 'Reconnected. Press “Start attempt” for a new attempt.';
+      }
+      startMicrophone();
+    });
+
+    ws.addEventListener('message', (event) => {
+      // Binary audio frames are sent by us, we only receive JSON text messages
+      if (typeof event.data === 'string') {
+        handleMessage(event.data);
+      }
+    });
+
+    ws.addEventListener('close', () => {
+      log('WebSocket closed');
+      setStatus('Disconnected', '#64748b');
+      btn.textContent = 'Connect';
+      btn.disabled = false;
+      cleanupAudio();
+    });
+
+    ws.addEventListener('error', (err) => {
+      log('WebSocket error');
+      setStatus('WebSocket error', '#ef4444');
+    });
+
+  } catch (err) {
+    log('Connection error: ' + err.message);
+    setStatus('Failed: ' + err.message, '#ef4444');
+    btn.textContent = 'Connect';
+    btn.disabled = false;
+  }
+});
+
+function handleMessage(data) {
+  let msg;
+  try { msg = JSON.parse(data); } catch (e) { log('Invalid JSON: ' + data); return; }
+
+  const type = msg.type;
+  log('Event: ' + type);
+
+  if (type === 'Begin') {
+    log('Session started: ' + msg.id);
+  } else if (type === 'Turn') {
+    const transcript = msg.transcript || '';
+    const order = (typeof msg.turn_order === 'number') ? msg.turn_order : null;
+    if (msg.end_of_turn) {
+      userBox.textContent = transcript;
+      log('Final: ' + transcript);
+      const done = recorder.onTurn({ text: transcript, final: true, order });
+      if (done) submitFinishedAttempt(done);
+    } else {
+      recorder.onTurn({ text: transcript, final: false, order });
+      userBox.textContent = transcript;
+    }
+  } else if (type === 'Termination') {
+    log('Session terminated: ' + msg.audio_duration_seconds + 's audio, ' + msg.session_duration_seconds + 's session');
+  } else if (type === 'Heartbeat') {
+    // Optional: could use for monitoring
+  } else if (type === 'Error') {
+    log('Server error: ' + JSON.stringify(msg));
+    setStatus('Error: ' + msg.message, '#ef4444');
+  }
+}
+
+function startMicrophone() {
+  if (!audioCtx) {
+    // 16kHz for Streaming API (different from Voice Agent's 24kHz)
+    audioCtx = new AudioContext({ sampleRate: 16000 });
+  }
+  audioCtx.resume().catch(() => {});
+
+  navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false } })
+    .then(async (s) => {
+      stream = s;
+      source = audioCtx.createMediaStreamSource(stream);
+
+      try {
+        await audioCtx.audioWorklet.addModule('pcm-processor.js');
+        // Pass actual sample rate for resampling (Chrome honors 16000, Firefox/Safari may not)
+        worklet = new AudioWorkletNode(audioCtx, 'pcm-processor', {
+          processorOptions: { inputSampleRate: audioCtx.sampleRate }
+        });
+        connectWorklet();
+        log('Worklet loaded (pcm-processor.js)');
+      } catch (e) {
+        log('Worklet file load failed, using inline');
+        createInlineWorklet();
+      }
+    })
+    .catch((e) => log('Mic error: ' + e.message));
+}
+
+function connectWorklet() {
+  if (!worklet || !source || !audioCtx) return;
+  try {
+    source.connect(worklet);
+    worklet.connect(audioCtx.destination);
+    worklet.port.onmessage = (e) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        // Send raw binary PCM16 frames (not base64 JSON)
+        ws.send(e.data);
+      }
+    };
+    log('Mic audio connected to WebSocket');
+  } catch (e) {
+    log('Worklet connect error: ' + e.message);
+  }
+}
+
+function createInlineWorklet() {
+  // Fallback mirror of pcm-processor.js: resample to 16 kHz mono PCM16 and
+  // emit fixed ~100 ms (1600-sample) chunks. AssemblyAI requires 50–1000 ms
+  // per binary message, so this path must buffer exactly like the file one.
+  const code = `
+    class PCMProcessor extends AudioWorkletProcessor {
+      constructor() {
+        super();
+        this.buffer = new Float32Array();
+        this.pending = new Int16Array(0);
+        this.CHUNK_SAMPLES = 1600;
+        this.MIN_SAMPLES = 800;
+      }
+      process(inputs) {
+        const input = inputs[0]?.[0];
+        if (input) {
+          const inputRate = sampleRate;
+          const targetRate = 16000;
+          const ratio = inputRate / targetRate;
+          const newBuffer = new Float32Array(this.buffer.length + input.length);
+          newBuffer.set(this.buffer);
+          newBuffer.set(input, this.buffer.length);
+          this.buffer = newBuffer;
+          const outputLength = Math.floor(this.buffer.length / ratio);
+          if (outputLength > 0) {
+            const resampled = new Int16Array(outputLength);
+            for (let i = 0; i < outputLength; i++) {
+              const sample = this.buffer[Math.floor(i * ratio)] ?? 0;
+              resampled[i] = Math.max(-32768, Math.min(32767, Math.round(sample * 32767)));
+            }
+            const consumed = Math.floor(outputLength * ratio);
+            if (consumed > 0) this.buffer = this.buffer.slice(consumed);
+            const merged = new Int16Array(this.pending.length + resampled.length);
+            merged.set(this.pending);
+            merged.set(resampled, this.pending.length);
+            this.pending = merged;
+            while (this.pending.length >= this.CHUNK_SAMPLES) {
+              const chunk = this.pending.slice(0, this.CHUNK_SAMPLES);
+              this.pending = this.pending.slice(this.CHUNK_SAMPLES);
+              this.port.postMessage(chunk.buffer, [chunk.buffer]);
+            }
+          }
+        } else if (this.pending.length >= this.MIN_SAMPLES) {
+          const chunk = this.pending;
+          this.pending = new Int16Array(0);
+          this.port.postMessage(chunk.buffer, [chunk.buffer]);
+        }
+        return true;
+      }
+    }
+    registerProcessor('pcm-processor', PCMProcessor);
+  `;
+  const blob = new Blob([code], { type: 'application/javascript' });
+  const url = URL.createObjectURL(blob);
+  audioCtx.audioWorklet.addModule(url).then(() => {
+    worklet = new AudioWorkletNode(audioCtx, 'pcm-processor');
+    connectWorklet();
+    log('Inline worklet connected');
+  }).catch((e) => log('Inline worklet error: ' + e.message));
+}
+
+function endSession() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    // Send Terminate to finalize the current turn
+    ws.send(JSON.stringify({ type: 'Terminate' }));
+  }
+  cleanupAudio();
+  setTimeout(() => {
+    if (ws) ws.close();
+  }, 500);
+}
+
+function cleanupAudio() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (worklet) { worklet.disconnect(); worklet = null; }
+  if (source) { source.disconnect(); source = null; }
+  if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+}
+
+window.addEventListener('pagehide', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'Terminate' }));
+  }
+});
+
+// ================= M1: practice loop (additive; M0 transport above untouched) =================
+
+let sessionId = null;
+let currentPromptId = null;
+let attemptCount = 0;
+const recorder = new AttemptRecorder();
+
+const promptTitleEl = document.getElementById('promptTitle');
+const promptObjectiveEl = document.getElementById('promptObjective');
+const newPromptBtn = document.getElementById('newPromptBtn');
+const startAttemptBtn = document.getElementById('startAttemptBtn');
+const finishAttemptBtn = document.getElementById('finishAttemptBtn');
+const retryBtn = document.getElementById('retryBtn');
+const attemptNumEl = document.getElementById('attemptNum');
+const attemptHintEl = document.getElementById('attemptHint');
+const feedbackBox = document.getElementById('agentTranscript');
+const comparisonPanel = document.getElementById('comparisonPanel');
+const comparisonBox = document.getElementById('comparisonBox');
+const attemptStateEl = document.getElementById('attemptState');
+
+function setAttemptState(text, active) {
+  attemptStateEl.textContent = text;
+  attemptStateEl.classList.toggle('state-active', !!active);
+}
+
+// Coach Engine selection. Default is AI Coach (best experience first; if no
+// LLM provider is configured the attempt truthfully falls back to Rules).
+// Read at submit time so the attempt is associated with the user's choice.
+function selectedEngine() {
+  const checked = document.querySelector('input[name="coachEngine"]:checked');
+  return checked && checked.value === 'rules' ? 'rules' : 'ai';
+}
+
+function engineRadios() {
+  return Array.from(document.querySelectorAll('input[name="coachEngine"]'));
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+async function newSession(excludePromptId) {
+  const res = await fetch('/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ excludePromptId: excludePromptId || null }),
+  });
+  if (!res.ok) throw new Error('Session request returned ' + res.status);
+  const data = await res.json();
+  sessionId = data.sessionId;
+  currentPromptId = data.prompt.id;
+  promptTitleEl.textContent = data.prompt.title;
+  promptObjectiveEl.textContent = data.prompt.objective;
+  attemptCount = 0;
+  attemptNumEl.textContent = '1';
+  recorder.resetToIdle();
+  setAttemptState('Ready', false);
+  feedbackBox.innerHTML = '';
+  comparisonPanel.hidden = true;
+  updateAttemptButtons();
+  attemptHintEl.textContent = 'Connect, then press “Start attempt” and speak.';
+  log('New session: ' + sessionId);
+}
+
+async function initSession() {
+  try {
+    await newSession(null);
+  } catch (e) {
+    promptTitleEl.textContent = 'Could not load a prompt';
+    promptObjectiveEl.textContent = 'Start the server and reload. (' + e.message + ')';
+    log('Session init failed: ' + e.message);
+  }
+}
+
+function updateAttemptButtons() {
+  const connected = ws && ws.readyState === WebSocket.OPEN;
+  const busy = recorder.isRecording() || recorder.isFinishing();
+  startAttemptBtn.disabled = busy || !connected || !sessionId;
+  // Finish requires a live connection: without one no final Turn can arrive,
+  // and the UI would strand in "Finishing…" forever.
+  finishAttemptBtn.disabled = !recorder.isRecording() || !connected;
+  retryBtn.disabled = busy || attemptCount === 0;
+  // Never discard an in-progress attempt by switching prompt mid-recording.
+  newPromptBtn.disabled = busy;
+  // The engine choice belongs to the attempt: lock it while one is in flight
+  // so a mid-attempt switch cannot create ambiguous state. The selection is
+  // preserved across retries (only the disabled flag changes).
+  engineRadios().forEach((r) => { r.disabled = busy; });
+}
+
+// Keep attempt buttons in sync with connection state.
+const _setStatusForM1 = setStatus;
+setStatus = function (text, color) {
+  _setStatusForM1(text, color);
+  try { updateAttemptButtons(); } catch (e) { /* UI not ready yet */ }
+};
+
+startAttemptBtn.addEventListener('click', () => {
+  if (!sessionId || recorder.isRecording() || recorder.isFinishing()) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    attemptHintEl.textContent = 'Connect first, then start the attempt.';
+    return;
+  }
+  recorder.start(Date.now());
+  userBox.textContent = '';
+  setAttemptState('Recording', true);
+  attemptHintEl.textContent = 'Recording attempt ' + (attemptCount + 1) + ' — speak now, then press “Finish attempt”.';
+  updateAttemptButtons();
+  log('Attempt recording started');
+});
+
+finishAttemptBtn.addEventListener('click', () => {
+  const r = recorder.finish(Date.now());
+  updateAttemptButtons();
+  if (r.status === 'submitted') {
+    submitFinishedAttempt(r.attempt);
+  } else if (r.status === 'waiting') {
+    setAttemptState('Finishing…', true);
+    attemptHintEl.textContent = 'Finishing… waiting for the final transcript, then analyzing.';
+    log('Finish clicked — waiting for end-of-turn boundary');
+  } else if (r.status === 'empty') {
+    attemptHintEl.textContent = 'No speech captured — press “Start attempt” and try again.';
+    log('Finish with empty transcript; attempt not submitted');
+  }
+  // 'duplicate'/'invalid' are safely ignored: no double submit.
+});
+
+async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
+  setAttemptState('Analyzing…', true);
+  attemptHintEl.textContent = 'Analyzing attempt…';
+  const coachEngine = selectedEngine();
+  try {
+    const res = await fetch('/api/sessions/' + sessionId + '/attempts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Attempt request returned ' + res.status));
+    attemptCount = data.attempt.n;
+    attemptNumEl.textContent = String(attemptCount + 1);
+    renderAnalysis(data.analysis, data.attempt, data.coachSource, data.requestedEngine || coachEngine);
+    setAttemptState('Feedback — press Try again', false);
+    attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
+    if (attemptCount >= 2) await loadComparison();
+  } catch (e) {
+    attemptHintEl.textContent = 'Analysis failed: ' + e.message;
+    log('Attempt submit failed: ' + e.message);
+  }
+  updateAttemptButtons();
+}
+
+retryBtn.addEventListener('click', () => {
+  if (recorder.isRecording() || recorder.isFinishing() || attemptCount === 0) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    attemptHintEl.textContent = 'Reconnect first, then retry.';
+    return;
+  }
+  setAttemptState('Retry', true);
+  startAttemptBtn.click();
+});
+
+newPromptBtn.addEventListener('click', async () => {
+  try {
+    await newSession(currentPromptId);
+  } catch (e) {
+    attemptHintEl.textContent = 'Could not load a new prompt: ' + e.message;
+  }
+});
+
+function renderAnalysis(analysis, attempt, coachSource, requestedEngine) {
+  const m = analysis.metrics;
+  const li = (items) => items.map((t) => '<li>' + escapeHtml(t) + '</li>').join('');
+  const pace = m.wpm == null ? 'n/a' : m.wpm + ' wpm';
+  // Requested engine (the user's choice, associated with this attempt) vs the
+  // actual source (truthful: fallback is never presented as AI output).
+  const requested = requestedEngine === 'rules' ? 'Rules Coach' : 'AI Coach';
+  const badge = coachSource === 'llm'
+    ? '<span class="hint">AI Coach</span>'
+    : (requestedEngine === 'rules'
+      ? '<span class="hint">Rules Coach</span>'
+      : '<span class="hint">Rules Coach — AI fallback</span>');
+  feedbackBox.innerHTML =
+    '<div class="feedback">' +
+    '<h3>Attempt ' + attempt.n + ' · Coach: ' + escapeHtml(requested) + ' ' + badge + '</h3>' +
+    '<div class="metrics">' +
+    '<span class="metric">' + m.wordCount + ' words</span>' +
+    '<span class="metric">' + m.durationSec + 's</span>' +
+    '<span class="metric">' + pace + '</span>' +
+    '<span class="metric">' + m.fillerCount + ' fillers</span>' +
+    '<span class="metric">' + m.repeatCount + ' repeats</span>' +
+    '<span class="metric">' + m.sentenceCount + ' sentences</span>' +
+    '</div>' +
+    (analysis.strengths.length ? '<h3>Strengths</h3><ul>' + li(analysis.strengths) + '</ul>' : '') +
+    (analysis.areas_to_improve.length ? '<h3>Work on</h3><ul>' + li(analysis.areas_to_improve) + '</ul>' : '') +
+    (analysis.actionable_feedback.length ? '<h3>Do next time</h3><ul>' + li(analysis.actionable_feedback) + '</ul>' : '') +
+    '<div class="retry-focus"><strong>Retry focus:</strong> ' + escapeHtml(analysis.retry_focus.focus) +
+    '<br><span class="hint">' + escapeHtml(analysis.retry_focus.tip) + '</span></div>' +
+    '</div>';
+  log('Attempt ' + attempt.n + ' analyzed');
+}
+
+async function loadComparison() {
+  try {
+    const res = await fetch('/api/sessions/' + sessionId + '/comparison');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Comparison request returned ' + res.status));
+    document.getElementById('cmpPrev').textContent = String(attemptCount - 1);
+    document.getElementById('cmpCurr').textContent = String(attemptCount);
+    const sec = (title, items, cls) => items.length
+      ? '<h3>' + title + '</h3><ul class="' + cls + '">' + items.map((i) => '<li>' + escapeHtml(i.detail) + '</li>').join('') + '</ul>'
+      : '';
+    const focusVerdict = data.retry_focus_addressed == null ? ''
+      : data.retry_focus_addressed
+        ? '<p class="cmp-good"><strong>Yes — you addressed the previous retry focus.</strong></p>'
+        : '<p class="cmp-bad"><strong>Not yet — the previous retry focus still needs work.</strong></p>';
+    comparisonBox.innerHTML = '<div class="feedback">' + focusVerdict +
+      sec('Improved', data.improved, 'cmp-good') +
+      sec('Stayed the same', data.same, 'cmp-same') +
+      sec('Got worse', data.worse, 'cmp-bad') +
+      '<div class="retry-focus"><strong>Next focus:</strong> ' + escapeHtml(data.next_focus.focus) +
+      '<br><span class="hint">' + escapeHtml(data.next_focus.tip) + '</span></div></div>';
+    comparisonPanel.hidden = false;
+    setAttemptState('Comparison', false);
+    log('Comparison rendered');
+  } catch (e) {
+    log('Comparison failed: ' + e.message);
+  }
+}
+
+initSession();

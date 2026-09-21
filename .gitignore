@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit real keys (see m0-voice-coach/.env.example)
+.env
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
