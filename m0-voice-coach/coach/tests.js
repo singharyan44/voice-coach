@@ -12,6 +12,7 @@ const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-ana
 const { analyzeAttemptForSession } = require('./coach-engine');
 const { buildHealth } = require('./health');
 const { chunkPCM16 } = require('../public/sample-player');
+const { buildProfile, skillVerdicts } = require('./profile');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -287,5 +288,29 @@ if (fail) process.exit(1);
   }
 
   console.log('SAMPLE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- personal profile ----------
+  {
+    const v = skillVerdicts({ wpm: 130, fillerRatePer100: 1, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 30 });
+    ok('profile all good', v.pace && v.fillers && v.repeats && v.structure && v.substance, '');
+    const v2 = skillVerdicts({ wpm: null, fillerRatePer100: 9, repeatCount: 3, fragmentCount: 0, longSentenceCount: 1, wordCount: 5 });
+    ok('profile mixed', v2.pace === null && !v2.fillers && !v2.repeats && !v2.structure && !v2.substance, '');
+    const mk = (metrics, target) => ({ promptTitle: 'P', metrics, analysis: { retry_focus: { focus: 'f', targets: [target], tip: 't' } }, createdAt: '2026-01-01T00:00:00.000Z' });
+    const p = buildProfile([
+      mk({ wpm: 130, fillerRatePer100: 8, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 30 }, 'fillerRatePer100'),
+      mk({ wpm: 140, fillerRatePer100: 9, repeatCount: 1, fragmentCount: 0, longSentenceCount: 0, wordCount: 25 }, 'fillerRatePer100'),
+      mk({ wpm: 120, fillerRatePer100: 1, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 22 }, 'wpm'),
+    ]);
+    ok('profile totals', p.totalAttempts === 3 && p.trends.length === 3 && p.promptsPracticed.length === 1, '');
+    ok('profile strength', p.strengths.some((s) => s.key === 'structure'), '');
+    ok('profile weakness', p.recurringWeaknesses.some((s) => s.key === 'fillers'), '');
+    ok('profile top focus', p.topFocus && p.topFocus.target === 'fillerRatePer100' && p.topFocus.times === 2, '');
+    const empty = buildProfile([]);
+    ok('profile empty', empty.totalAttempts === 0 && empty.topFocus === null && empty.trends.length === 0, '');
+    const junk = buildProfile([null, {}, { metrics: null }]);
+    ok('profile junk ignored', junk.totalAttempts === 0, '');
+  }
+
+  console.log('PROFILE-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

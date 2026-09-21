@@ -296,7 +296,81 @@ const healthLineEl = document.getElementById('healthLine');
 const sampleABtn = document.getElementById('sampleABtn');
 const sampleBBtn = document.getElementById('sampleBBtn');
 const sampleHintEl = document.getElementById('sampleHint');
+const profilePanel = document.getElementById('profilePanel');
+const profileBox = document.getElementById('profileBox');
+const historyBox = document.getElementById('historyBox');
 let sampleStreaming = false;
+
+// ---- Day 1: local history (survives reload, free-tier safe) ----
+const HISTORY_KEY = 'voicecoach.history.v1';
+const HISTORY_MAX = 100;
+
+function loadHistory() {
+  try {
+    const v = JSON.parse(localStorage.getItem(HISTORY_KEY));
+    return Array.isArray(v) ? v : [];
+  } catch (e) { return []; }
+}
+
+function saveAttemptToHistory(record) {
+  const h = loadHistory();
+  h.push(record);
+  while (h.length > HISTORY_MAX) h.shift();
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(h)); } catch (e) { /* storage full/blocked */ }
+  return h;
+}
+
+function renderHistory(history) {
+  if (!history.length) {
+    historyBox.innerHTML = 'No attempts yet — your practice history will appear here and survive reloads.';
+    return;
+  }
+  historyBox.innerHTML = '<div class="feedback"><ul>' + history.slice().reverse().map((a) => {
+    const when = a.createdAt ? new Date(a.createdAt).toLocaleString() : '';
+    const m = a.metrics || {};
+    const pace = m.wpm == null ? 'n/a' : m.wpm + ' wpm';
+    const focus = a.analysis && a.analysis.retry_focus ? a.analysis.retry_focus.focus : '';
+    return '<li><strong>' + escapeHtml(a.promptTitle || 'Practice') + '</strong> <span class="hint">' + escapeHtml(when) + '</span><br>' +
+      '<span class="hint">' + (m.wordCount || 0) + ' words · ' + pace + ' · ' + (m.fillerCount || 0) + ' fillers · ' +
+      escapeHtml(a.coachSource === 'llm' ? 'AI Coach' : 'Rules Coach') + '</span>' +
+      (focus ? '<br>Focus was: ' + escapeHtml(focus) : '') + '</li>';
+  }).join('') + '</ul></div>';
+}
+
+async function refreshProfile(history) {
+  const list = history || loadHistory();
+  if (!list.length) { profilePanel.hidden = true; return; }
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempts: list }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error('profile returned ' + res.status);
+    renderProfile(data.profile);
+  } catch (e) {
+    log('Profile refresh failed: ' + e.message);
+  }
+}
+
+function renderProfile(p) {
+  const skillLine = (s) => '<li>' + escapeHtml(s.label) + ' <span class="hint">' + s.good + '/' + s.total + '</span></li>';
+  const first = p.trends[0], last = p.trends[p.trends.length - 1];
+  const trendLine = (label, a, b, suffix) => (a == null || b == null) ? '' :
+    '<span class="metric">' + label + ' ' + a + ' → ' + b + (suffix || '') + '</span>';
+  profileBox.innerHTML = '<div class="feedback">' +
+    '<div class="metrics"><span class="metric">' + p.totalAttempts + ' attempts</span>' +
+    trendLine('pace', first && first.wpm, last && last.wpm, ' wpm') +
+    trendLine('fillers', first && first.fillerRatePer100, last && last.fillerRatePer100, '/100w') +
+    '</div>' +
+    (p.strengths.length ? '<h3>Strengths</h3><ul>' + p.strengths.map(skillLine).join('') + '</ul>' : '') +
+    (p.recurringWeaknesses.length ? '<h3>Recurring weaknesses</h3><ul>' + p.recurringWeaknesses.map(skillLine).join('') + '</ul>' : '') +
+    (p.topFocus ? '<div class="retry-focus"><strong>Training focus:</strong> ' + escapeHtml(p.topFocus.target) +
+      ' <span class="hint">(flagged ' + p.topFocus.times + '×)</span></div>' : '') +
+    '</div>';
+  profilePanel.hidden = false;
+}
 
 function updateSampleButtons() {
   const connected = ws && ws.readyState === WebSocket.OPEN;
@@ -500,6 +574,21 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
       },
     };
     renderAnalysis(data.analysis, data.attempt, data.coachSource, data.requestedEngine || coachEngine);
+    const history = saveAttemptToHistory({
+      promptTitle: promptTitleEl.textContent,
+      transcript,
+      metrics: data.analysis.metrics,
+      analysis: {
+        strengths: data.analysis.strengths,
+        areas_to_improve: data.analysis.areas_to_improve,
+        retry_focus: data.analysis.retry_focus,
+      },
+      coachSource: data.coachSource,
+      requestedEngine: data.requestedEngine || coachEngine,
+      createdAt: new Date().toISOString(),
+    });
+    renderHistory(history);
+    refreshProfile(history);
     attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
     if (data.comparison) {
       renderComparisonData(data.comparison);
@@ -599,3 +688,5 @@ function renderComparisonData(data) {
 initSession();
 checkHealth();
 updateSampleButtons();
+renderHistory(loadHistory());
+refreshProfile();

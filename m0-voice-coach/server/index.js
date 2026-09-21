@@ -9,6 +9,7 @@ const { analyzeWithLLM } = require('../coach/llm-analyze');
 const { getProviderConfig } = require('../coach/llm/provider');
 const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { buildHealth } = require('../coach/health');
+const { buildProfile } = require('../coach/profile');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -71,6 +72,13 @@ module.exports = app;
 // itself instead of surfacing later as a cryptic token/analysis error.
 app.get('/api/health', (req, res) => {
   res.json(buildHealth());
+});
+
+// Personal profile from a client-held history (stateless: the browser owns
+// the attempt list in localStorage, the server only aggregates it).
+app.post('/api/profile', (req, res) => {
+  const attempts = req.body && Array.isArray(req.body.attempts) ? req.body.attempts.slice(0, 200) : [];
+  res.json({ profile: buildProfile(attempts) });
 });
 
 // Start a practice session with a prompt.
