@@ -22,6 +22,16 @@ const rematchBtn = document.getElementById('rematchBtn');
 const debateHintEl = document.getElementById('debateHint');
 const debateDiagnosisPanel = document.getElementById('debateDiagnosisPanel');
 const debateDiagnosisBox = document.getElementById('debateDiagnosisBox');
+const speechDrillBtn = document.getElementById('speechDrillBtn');
+// Speech skill keys (mirrors coach/profile.js SKILLS): if the debate retry
+// focus targets delivery, offer the matching speech drill.
+const SPEECH_SKILLS = ['pace', 'fillers', 'repeats', 'structure', 'substance'];
+
+speechDrillBtn.addEventListener('click', () => {
+  if (typeof setDebateMode === 'function') setDebateMode(true);
+  if (typeof refreshAssignment === 'function') refreshAssignment();
+  log('Journey: debate diagnosis → speech drill');
+});
 const debateSampleForBtn = document.getElementById('debateSampleForBtn');
 const debateSampleAgainstBtn = document.getElementById('debateSampleAgainstBtn');
 const debateSampleHintEl = document.getElementById('debateSampleHint');
@@ -133,6 +143,7 @@ debateStartBtn.addEventListener('click', () => {
   debateRecorder.resetToIdle();
   debateThread.innerHTML = '';
   debateDiagnosisPanel.hidden = true;
+  speechDrillBtn.hidden = true;
   debateArenaPanel.hidden = false;
   setDebateState('Ready', false);
   debateHintEl.textContent = 'You argue ' + debateSide.toUpperCase() + ': "' + debateMotion.motion + '". Press “Speak argument”, make your case, then “Finish round”.';
@@ -257,6 +268,7 @@ diagnoseBtn.addEventListener('click', async () => {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('Diagnose returned ' + res.status));
     renderDebateDiagnosis(data.diagnosis, data.source);
+    if (typeof refreshAssignment === 'function') refreshAssignment();
     setDebateState('Diagnosed', false);
     debateHintEl.textContent = 'Diagnosis ready. Rematch to argue the other side, or keep debating.';
   } catch (e) {
@@ -286,6 +298,8 @@ function renderDebateDiagnosis(d, source) {
     '<br><span class="hint">' + escapeHtml(d.retry_focus.tip) + '</span></div>' +
     '</div>';
   debateDiagnosisPanel.hidden = false;
+  const hitsSpeech = (d.retry_focus.targets || []).some((t) => SPEECH_SKILLS.includes(t));
+  speechDrillBtn.hidden = !hitsSpeech;
 }
 
 rematchBtn.addEventListener('click', () => {
@@ -297,6 +311,7 @@ rematchBtn.addEventListener('click', () => {
   debateRecorder.resetToIdle();
   debateThread.innerHTML = '';
   debateDiagnosisPanel.hidden = true;
+  speechDrillBtn.hidden = true;
   setDebateState('Ready', false);
   debateHintEl.textContent = 'Rematch — now you argue ' + debateSide.toUpperCase() + '. Press “Speak argument”.';
   log('Debate rematch, sides swapped (' + debateSide + ')');

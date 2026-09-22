@@ -50,11 +50,11 @@ weaknesses / top focus / trends) + History + Profile panels.
 - Validated: 111/111 unit tests (contracts, fallback, mocked LLM), DOM check,
   live motions/opponent/diagnose + 400 guards.
 
-## Day 6 — Integration + demo path (not mobile polish)
-Make the complete journey stupidly obvious, first visit to profile update:
-Speak → Feedback → Retry → "X is still weak" → targeted exercise → Debate →
-opponent attacks YOUR argument → Feedback → Retry → Profile updated.
-Polish only with leftover time. Mobile: test, fix blockers, nothing more.
+## Day 6 — Integration + demo path ✅ DONE (not mobile polish)
+- Journey strip under the header; comparison → "Continue in Debate";
+  diagnosis → "Train this in Speech Coach" (shown when retry targets
+  delivery skills); assignment refreshes after diagnosis (debate turns feed
+  the profile). Validated: 111/111 tests, DOM check.
 
 ## Day 7 — Demo prep + hardening
 90-second script following the Day 6 journey, dry runs, every fallback path.

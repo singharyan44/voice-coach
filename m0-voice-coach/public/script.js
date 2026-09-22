@@ -293,6 +293,13 @@ const attemptHintEl = document.getElementById('attemptHint');
 const feedbackBox = document.getElementById('agentTranscript');
 const comparisonPanel = document.getElementById('comparisonPanel');
 const comparisonBox = document.getElementById('comparisonBox');
+const debateCtaBtn = document.getElementById('debateCtaBtn');
+
+// Cross-mode link: comparison → debate arena (Day 6 integration).
+debateCtaBtn.addEventListener('click', () => {
+  if (typeof setDebateMode === 'function') setDebateMode(false);
+  log('Journey: speech comparison → debate');
+});
 const attemptStateEl = document.getElementById('attemptState');
 const healthLineEl = document.getElementById('healthLine');
 const sampleABtn = document.getElementById('sampleABtn');

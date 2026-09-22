@@ -127,4 +127,10 @@ h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
 .thread-msg.user { border-left: 3px solid #22d3ee; }
 .thread-msg.opponent { border-left: 3px solid #f59e0b; }
 .mode-tab-active { outline: 2px solid #22d3ee; }
+.journey {
+  color: #67e8f9;
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+  margin: -0.5rem 0 1rem;
+}
 @media (max-width: 640px) { .panels { grid-template-columns: 1fr; } }
