@@ -431,17 +431,10 @@ async function playSample(url, label) {
   sampleStreaming = true;
   updateSampleButtons();
   updateAttemptButtons();
-  // Pause mic capture while the sample plays: otherwise the mic re-captures
-  // the speaker output and AssemblyAI receives everything twice. The mic
-  // worklet keeps running; only its input is detached, then re-attached.
-  let micPaused = false;
+  const micPaused = pauseMicCapture();
   try {
     if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
     await audioCtx.resume().catch(() => {});
-    if (source && worklet) {
-      source.disconnect();
-      micPaused = true;
-    }
     await streamSampleFile({
       url,
       audioCtx,
@@ -453,13 +446,27 @@ async function playSample(url, label) {
     sampleHintEl.textContent = 'Sample failed: ' + e.message;
     log('Sample error: ' + e.message);
   } finally {
-    if (micPaused && source && worklet) {
-      try { source.connect(worklet); } catch (e) { log('Mic resume error: ' + e.message); }
-    }
+    if (micPaused) resumeMicCapture();
   }
   sampleStreaming = false;
   updateSampleButtons();
   updateAttemptButtons();
+}
+
+// Shared mic pause/resume for sample playback (speech + debate): the mic
+// worklet keeps running; only its input is detached so AssemblyAI does not
+// receive speaker output twice. Returns whether the mic was paused.
+function pauseMicCapture() {
+  try {
+    if (source && worklet) { source.disconnect(); return true; }
+  } catch (e) { /* ignore */ }
+  return false;
+}
+
+function resumeMicCapture() {
+  try {
+    if (source && worklet) source.connect(worklet);
+  } catch (e) { log('Mic resume error: ' + e.message); }
 }
 
 sampleABtn.addEventListener('click', () => playSample('samples/sample-a-weak-16k.wav', 'Sample 1'));
@@ -557,7 +564,7 @@ function updateAttemptButtons() {
 const _setStatusForM1 = setStatus;
 setStatus = function (text, color) {
   _setStatusForM1(text, color);
-  try { updateAttemptButtons(); updateSampleButtons(); } catch (e) { /* UI not ready yet */ }
+  try { updateAttemptButtons(); updateSampleButtons(); if (typeof updateDebateButtons === 'function') updateDebateButtons(); } catch (e) { /* UI not ready yet */ }
 };
 
 startAttemptBtn.addEventListener('click', () => {
