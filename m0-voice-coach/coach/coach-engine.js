@@ -10,10 +10,24 @@
 //           fallback: true|false }.
 // The LLM function is injected so tests can spy on it without network access.
 
-async function analyzeAttemptForSession({ engine, prompt, transcript, metrics, previous, llmAnalyze, rulesAnalyze }) {
+async function analyzeAttemptForSession({ engine, prompt, transcript, metrics, previous, llmAnalyze, rulesAnalyze, visionAnalyze, frames }) {
   const requested = engine === 'rules' ? 'rules' : 'ai';
   if (requested === 'rules') {
     return { analysis: rulesAnalyze({ metrics }), coachSource: 'rules', requested, fallback: false };
+  }
+  // Vision first when frames were captured: one call produces the full
+  // analysis plus visual notes. Any failure drops through to the text LLM,
+  // then to deterministic rules — the chain degrades gracefully.
+  const usableFrames = Array.isArray(frames)
+    ? frames.filter((f) => typeof f === 'string' && f.startsWith('data:image/')).slice(0, 4)
+    : [];
+  if (usableFrames.length > 0 && visionAnalyze) {
+    try {
+      const analysis = await visionAnalyze({ prompt, transcript, metrics, previous, frames: usableFrames });
+      return { analysis, coachSource: 'vision', requested, fallback: false };
+    } catch (err) {
+      console.error('Vision coach unavailable, falling back to text LLM:', err.message);
+    }
   }
   try {
     const analysis = await llmAnalyze({ prompt, transcript, metrics, previous });

@@ -302,6 +302,45 @@ debateCtaBtn.addEventListener('click', () => {
   log('Journey: speech comparison → debate');
 });
 const attemptStateEl = document.getElementById('attemptState');
+const cameraToggleBtn = document.getElementById('cameraToggleBtn');
+const cameraPreview = document.getElementById('cameraPreview');
+const cameraHintEl = document.getElementById('cameraHint');
+let cameraStream = null;
+let attemptFrames = [];
+
+// ---- Multimodal thin slice: opt-in camera, 3 frames per attempt ----
+cameraToggleBtn.addEventListener('click', async () => {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach((t) => t.stop());
+    cameraStream = null;
+    cameraPreview.srcObject = null;
+    cameraPreview.hidden = true;
+    cameraToggleBtn.textContent = 'Enable camera';
+    log('Camera off');
+    return;
+  }
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 } } });
+    cameraPreview.srcObject = cameraStream;
+    cameraPreview.hidden = false;
+    cameraToggleBtn.textContent = 'Disable camera';
+    log('Camera on — frames are analyzed then discarded, never stored');
+  } catch (e) {
+    cameraHintEl.textContent = 'Camera unavailable: ' + e.message;
+    log('Camera error: ' + e.message);
+  }
+});
+
+function captureFrame() {
+  try {
+    if (!cameraStream || !cameraPreview.videoWidth) return null;
+    const c = document.createElement('canvas');
+    c.width = 320;
+    c.height = Math.round(cameraPreview.videoHeight * (320 / cameraPreview.videoWidth));
+    c.getContext('2d').drawImage(cameraPreview, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.6);
+  } catch (e) { return null; }
+}
 const healthLineEl = document.getElementById('healthLine');
 const sampleABtn = document.getElementById('sampleABtn');
 const sampleBBtn = document.getElementById('sampleBBtn');
@@ -594,6 +633,7 @@ startAttemptBtn.addEventListener('click', () => {
     return;
   }
   recorder.start(Date.now());
+  attemptFrames = [captureFrame()].filter(Boolean);
   userBox.textContent = '';
   setAttemptState('Recording', true);
   attemptHintEl.textContent = 'Recording attempt ' + (attemptCount + 1) + ' — speak now, then press “Finish attempt”.';
@@ -602,6 +642,8 @@ startAttemptBtn.addEventListener('click', () => {
 });
 
 finishAttemptBtn.addEventListener('click', () => {
+  const f = captureFrame();
+  if (f) attemptFrames.push(f);
   const r = recorder.finish(Date.now());
   updateAttemptButtons();
   if (r.status === 'submitted') {
@@ -621,11 +663,16 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
   setAttemptState('Analyzing…', true);
   attemptHintEl.textContent = 'Analyzing attempt…';
   const coachEngine = selectedEngine();
+  const f = captureFrame();
+  if (f) attemptFrames.push(f);
+  // Frames ride along (max 3, never stored client-side either — lastAttempt
+  // and history records below deliberately exclude them).
+  const frames = attemptFrames.filter(Boolean).slice(-3);
   try {
     const res = await fetch('/api/sessions/' + sessionId + '/attempts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine, previous: lastAttempt }),
+      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine, previous: lastAttempt, frames }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('Attempt request returned ' + res.status));
@@ -698,9 +745,11 @@ function renderAnalysis(analysis, attempt, coachSource, requestedEngine) {
   const requested = requestedEngine === 'rules' ? 'Rules Coach' : 'AI Coach';
   const badge = coachSource === 'llm'
     ? '<span class="hint">AI Coach</span>'
-    : (requestedEngine === 'rules'
-      ? '<span class="hint">Rules Coach</span>'
-      : '<span class="hint">Rules Coach — AI fallback</span>');
+    : (coachSource === 'vision'
+      ? '<span class="hint">AI Coach + camera</span>'
+      : (requestedEngine === 'rules'
+        ? '<span class="hint">Rules Coach</span>'
+        : '<span class="hint">Rules Coach — AI fallback</span>'));
   feedbackBox.innerHTML =
     '<div class="feedback">' +
     '<h3>Attempt ' + attempt.n + ' · Coach: ' + escapeHtml(requested) + ' ' + badge + '</h3>' +
@@ -715,6 +764,7 @@ function renderAnalysis(analysis, attempt, coachSource, requestedEngine) {
     (analysis.strengths.length ? '<h3>Strengths</h3><ul>' + li(analysis.strengths) + '</ul>' : '') +
     (analysis.areas_to_improve.length ? '<h3>Work on</h3><ul>' + li(analysis.areas_to_improve) + '</ul>' : '') +
     (analysis.actionable_feedback.length ? '<h3>Do next time</h3><ul>' + li(analysis.actionable_feedback) + '</ul>' : '') +
+    ((analysis.visual_notes && analysis.visual_notes.length) ? '<h3>On camera</h3><ul>' + li(analysis.visual_notes) + '</ul>' : '') +
     '<div class="retry-focus"><strong>Retry focus:</strong> ' + escapeHtml(analysis.retry_focus.focus) +
     '<br><span class="hint">' + escapeHtml(analysis.retry_focus.tip) + '</span></div>' +
     '</div>';

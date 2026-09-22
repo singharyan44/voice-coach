@@ -16,6 +16,7 @@ const { generateSampleText, staticSample } = require('./sample-text');
 const { assignNext } = require('./assign');
 const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge, diagnoseRules } = require('./debate');
 const { opponentReply, diagnoseDebate } = require('./debate-llm');
+const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -434,5 +435,54 @@ if (fail) process.exit(1);
   }
 
   console.log('DEBATE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- vision (multimodal thin slice) ----------
+  {
+    const vcDef = getVisionConfig({ OPENROUTER_API_KEY: 'k' });
+    ok('vision default model', vcDef && vcDef.name === 'openrouter' && vcDef.model === 'inclusionai/ling-3.0-flash-vl:free', '');
+    const vcOver = getVisionConfig({ OPENROUTER_API_KEY: 'k', COACH_VISION_MODEL: 'x/y' });
+    ok('vision model override', vcOver && vcOver.model === 'x/y', '');
+    ok('vision unconfigured', getVisionConfig({}) === null, '');
+    const msgs = buildVisionMessages({
+      prompt: { title: 'T', objective: 'O' },
+      transcript: 'hello world',
+      metrics: { durationSec: 2, wordCount: 2, wpm: 60, fillerCount: 0, fillerRatePer100: 0, repeatCount: 0, sentenceCount: 1, fragmentCount: 0 },
+      previous: null,
+      frames: ['data:image/jpeg;base64,AAA', 'data:image/jpeg;base64,BBB'],
+    });
+    ok('vision messages carry frames', msgs.length === 1 && msgs[0].content.length === 3 && msgs[0].content[1].image_url.url.endsWith('AAA'), '');
+    const vv = validateVisionFeedback({ strengths: ['Steady.'], areas_to_improve: ['Pace.'], actionable_feedback: ['Slow down.'], retry_focus: { focus: 'Pace.', targets: ['wpm'], tip: 'Breathe.' }, visual_notes: ['Looking at camera in all frames.'] });
+    ok('vision valid passes', vv.visual_notes.length === 1 && vv.retry_focus.targets[0] === 'wpm', '');
+    const vvEmpty = validateVisionFeedback({ strengths: ['S.'], areas_to_improve: ['A.'], actionable_feedback: ['F.'], retry_focus: { focus: 'R.', targets: [], tip: '' } });
+    ok('vision notes optional', Array.isArray(vvEmpty.visual_notes) && vvEmpty.visual_notes.length === 0, '');
+    let threwV = false;
+    try { validateVisionFeedback({ strengths: ['S.'], areas_to_improve: ['A.'], actionable_feedback: ['F.'], retry_focus: { focus: 'R.', targets: [], tip: '' }, visual_notes: ['a', 'b', 'c', 'd'] }); } catch (e) { threwV = true; }
+    ok('vision notes capped', threwV);
+
+    // engine chain: vision → llm → rules
+    const vFake = { strengths: ['v'], areas_to_improve: [], actionable_feedback: [], retry_focus: { focus: 'f', targets: [], tip: '' }, visual_notes: ['Looking at camera.'] };
+    const lFake = { strengths: ['l'], areas_to_improve: [], actionable_feedback: [], retry_focus: { focus: 'f', targets: [], tip: '' } };
+    const rFake = { strengths: ['r'], areas_to_improve: [], actionable_feedback: [], retry_focus: { focus: 'f', targets: [], tip: '' } };
+    let vCalls = 0, lCalls = 0;
+    const vOK = async () => { vCalls++; return vFake; };
+    const lOK = async () => { lCalls++; return lFake; };
+    const rSync = () => rFake;
+    const boom = async () => { throw new Error('down'); };
+    const frames = ['data:image/jpeg;base64,AAA'];
+    const eV = await analyzeAttemptForSession({ engine: 'ai', prompt: {}, transcript: 't', metrics: {}, previous: null, llmAnalyze: lOK, rulesAnalyze: rSync, visionAnalyze: vOK, frames });
+    ok('engine vision first', eV.coachSource === 'vision' && vCalls === 1 && lCalls === 0, '');
+    vCalls = 0; lCalls = 0;
+    const eVL = await analyzeAttemptForSession({ engine: 'ai', prompt: {}, transcript: 't', metrics: {}, previous: null, llmAnalyze: lOK, rulesAnalyze: rSync, visionAnalyze: boom, frames });
+    ok('engine vision falls to llm', eVL.coachSource === 'llm' && lCalls === 1, '');
+    const eVR = await analyzeAttemptForSession({ engine: 'ai', prompt: {}, transcript: 't', metrics: {}, previous: null, llmAnalyze: boom, rulesAnalyze: rSync, visionAnalyze: boom, frames });
+    ok('engine vision+llm fall to rules', eVR.coachSource === 'rules' && eVR.fallback === true, '');
+    vCalls = 0; lCalls = 0;
+    const eNoFrames = await analyzeAttemptForSession({ engine: 'ai', prompt: {}, transcript: 't', metrics: {}, previous: null, llmAnalyze: lOK, rulesAnalyze: rSync, visionAnalyze: vOK, frames: [] });
+    ok('engine no frames skips vision', eNoFrames.coachSource === 'llm' && vCalls === 0 && lCalls === 1, '');
+    const eJunkFrames = await analyzeAttemptForSession({ engine: 'ai', prompt: {}, transcript: 't', metrics: {}, previous: null, llmAnalyze: lOK, rulesAnalyze: rSync, visionAnalyze: vOK, frames: ['not-an-image', 42, null] });
+    ok('engine junk frames skipped', eJunkFrames.coachSource === 'llm', '');
+  }
+
+  console.log('VISION-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

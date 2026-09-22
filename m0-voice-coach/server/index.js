@@ -6,6 +6,7 @@ const { createSession, getSession, addAttempt, makeAttempt } = require('../coach
 const { computeMetrics } = require('../coach/metrics');
 const { analyzeAttempt } = require('../coach/analyze');
 const { analyzeWithLLM } = require('../coach/llm-analyze');
+const { analyzeWithVision } = require('../coach/vision');
 const { getProviderConfig } = require('../coach/llm/provider');
 const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { buildHealth } = require('../coach/health');
@@ -191,6 +192,8 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
     previous: prev,
     llmAnalyze: analyzeWithLLM,
     rulesAnalyze: analyzeAttempt,
+    visionAnalyze: analyzeWithVision,
+    frames: req.body && Array.isArray(req.body.frames) ? req.body.frames.slice(0, 4) : [],
   });
   if (routed.fallback) {
     // Server-side log keeps the detail; the client gets a generic truthful flag.
