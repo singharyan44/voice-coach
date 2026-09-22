@@ -34,10 +34,12 @@ profile aggregation.
 History (localStorage) + `coach/profile.js` (strengths / recurring
 weaknesses / top focus / trends) + History + Profile panels.
 
-## Day 2 — Adaptation (keep it simple, no mastery system)
-- Weakest skill → next exercise targeting it ("assigned practice" card).
-- Prompt library to ~12, tagged by skill.
-- Done when: the app tells you what to practice next, and it's your weakness.
+## Day 2 — Adaptation ✅ DONE (no mastery system, just weakest-link)
+- `coach/assign.js`: weakest skill → targeted prompt (drills preferred) +
+  one-sentence reason citing the counts. 12-prompt library tagged by skill.
+- `POST /api/assign` (stateless) + sessions accept `promptId`.
+- UI: "Up next — assigned for you" card + Practice-this flow.
+- Validated: 97/97 unit tests, DOM check, live assign + promptId session.
 
 ## Days 3–5 — Debate Coach v1 (flagship: training partner, NOT sparring bot)
 - Loop: user argues → opponent identifies the actual argument → attacks its

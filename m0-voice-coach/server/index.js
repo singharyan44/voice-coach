@@ -1,7 +1,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 const express = require('express');
 const path = require('path');
-const { pickPrompt } = require('../coach/prompts');
+const { pickPrompt, getPrompt } = require('../coach/prompts');
 const { createSession, getSession, addAttempt, makeAttempt } = require('../coach/session');
 const { computeMetrics } = require('../coach/metrics');
 const { analyzeAttempt } = require('../coach/analyze');
@@ -10,6 +10,7 @@ const { getProviderConfig } = require('../coach/llm/provider');
 const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { buildHealth } = require('../coach/health');
 const { buildProfile } = require('../coach/profile');
+const { assignNext } = require('../coach/assign');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -81,12 +82,22 @@ app.post('/api/profile', (req, res) => {
   res.json({ profile: buildProfile(attempts) });
 });
 
-// Start a practice session with a prompt.
+// Start a practice session with a prompt. Accepts { promptId } to practice a
+// specific (e.g. assigned) prompt, or { excludePromptId } for a random one.
 app.post('/api/sessions', (req, res) => {
-  const excludeId = req.body && req.body.excludePromptId;
-  const prompt = pickPrompt(excludeId);
+  const body = req.body || {};
+  const prompt = (body.promptId && getPrompt(body.promptId)) || pickPrompt(body.excludePromptId);
   const session = createSession(prompt);
   res.json({ sessionId: session.id, prompt: session.prompt });
+});
+
+// Adaptive assignment: weakest skill → targeted next exercise. Stateless —
+// the browser sends its history, the server answers with prompt + reason.
+app.post('/api/assign', (req, res) => {
+  const body = req.body || {};
+  const attempts = Array.isArray(body.attempts) ? body.attempts.slice(0, 200) : [];
+  const assigned = assignNext(attempts, body.excludePromptId || null);
+  res.json({ prompt: assigned.prompt, reason: assigned.reason, weakest: assigned.weakest });
 });
 
 // Submit a finalized attempt: joined finalized Turns + client-measured timing.

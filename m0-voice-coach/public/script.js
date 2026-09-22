@@ -299,6 +299,45 @@ const sampleHintEl = document.getElementById('sampleHint');
 const profilePanel = document.getElementById('profilePanel');
 const profileBox = document.getElementById('profileBox');
 const historyBox = document.getElementById('historyBox');
+const assignPanel = document.getElementById('assignPanel');
+const assignTitleEl = document.getElementById('assignTitle');
+const assignObjectiveEl = document.getElementById('assignObjective');
+const assignReasonEl = document.getElementById('assignReason');
+const practiceAssignedBtn = document.getElementById('practiceAssignedBtn');
+let assignedPrompt = null;
+
+// ---- Day 2: adaptive assignment (weakest skill → targeted exercise) ----
+async function refreshAssignment() {
+  const history = loadHistory();
+  if (!history.length) { assignPanel.hidden = true; assignedPrompt = null; return; }
+  try {
+    const res = await fetch('/api/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempts: history }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error('assign returned ' + res.status);
+    assignedPrompt = data.prompt;
+    assignTitleEl.textContent = data.prompt.title;
+    assignObjectiveEl.textContent = data.prompt.objective;
+    assignReasonEl.textContent = data.reason;
+    assignPanel.hidden = false;
+    log('Assigned next: ' + data.prompt.title + ' (' + (data.weakest || 'baseline') + ')');
+  } catch (e) {
+    log('Assignment refresh failed: ' + e.message);
+  }
+}
+
+practiceAssignedBtn.addEventListener('click', async () => {
+  if (!assignedPrompt || recorder.isRecording() || recorder.isFinishing()) return;
+  try {
+    await newSession(null, assignedPrompt.id);
+    attemptHintEl.textContent = 'Assigned practice loaded. Connect, then press “Start attempt”.';
+  } catch (e) {
+    attemptHintEl.textContent = 'Could not load the assigned prompt: ' + e.message;
+  }
+});
 let sampleStreaming = false;
 
 // ---- Day 1: local history (survives reload, free-tier safe) ----
@@ -462,11 +501,11 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-async function newSession(excludePromptId) {
+async function newSession(excludePromptId, promptId) {
   const res = await fetch('/api/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ excludePromptId: excludePromptId || null }),
+    body: JSON.stringify({ excludePromptId: excludePromptId || null, promptId: promptId || null }),
   });
   if (!res.ok) throw new Error('Session request returned ' + res.status);
   const data = await res.json();
@@ -589,6 +628,7 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     });
     renderHistory(history);
     refreshProfile(history);
+    refreshAssignment();
     attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
     if (data.comparison) {
       renderComparisonData(data.comparison);
@@ -690,3 +730,4 @@ checkHealth();
 updateSampleButtons();
 renderHistory(loadHistory());
 refreshProfile();
+refreshAssignment();

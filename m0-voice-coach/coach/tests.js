@@ -13,6 +13,7 @@ const { analyzeAttemptForSession } = require('./coach-engine');
 const { buildHealth } = require('./health');
 const { chunkPCM16 } = require('../public/sample-player');
 const { buildProfile, skillVerdicts } = require('./profile');
+const { assignNext } = require('./assign');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -312,5 +313,39 @@ if (fail) process.exit(1);
   }
 
   console.log('PROFILE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- prompt library + adaptive assignment ----------
+  {
+    ok('prompts count>=12', PROMPTS.length >= 12, ' got ' + PROMPTS.length);
+    const ids = PROMPTS.map((p) => p.id);
+    ok('prompts unique ids', new Set(ids).size === ids.length, '');
+    const validSkills = new Set(['pace', 'fillers', 'repeats', 'structure', 'substance']);
+    ok('prompts skills valid', PROMPTS.every((p) => p.title && p.objective && Array.isArray(p.skills) && p.skills.length > 0 && p.skills.every((s) => validSkills.has(s))), '');
+    ok('prompts skill coverage', [...validSkills].every((s) => PROMPTS.some((p) => p.skills.includes(s))), '');
+
+    const mkA = (metrics, target) => ({ promptTitle: 'P', metrics, analysis: { retry_focus: { focus: 'f', targets: [target], tip: 't' } }, createdAt: '2026-01-01T00:00:00.000Z' });
+    const fillerHeavy = [
+      mkA({ wpm: 130, fillerRatePer100: 8, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 30 }, 'fillerRatePer100'),
+      mkA({ wpm: 140, fillerRatePer100: 9, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 25 }, 'fillerRatePer100'),
+    ];
+    const a1 = assignNext(fillerHeavy, null);
+    ok('assign weakest fillers', a1.weakest === 'fillers' && a1.prompt.skills.includes('fillers'), ' got ' + a1.weakest);
+    ok('assign reason cites', /Filler words.*2 of your last 2/.test(a1.reason), ' got ' + a1.reason);
+    const a2 = assignNext(fillerHeavy, a1.prompt.id);
+    ok('assign respects exclude', a2.prompt.id !== a1.prompt.id && a2.prompt.skills.includes('fillers'), '');
+    const a0 = assignNext([], null);
+    ok('assign empty baseline', a0.weakest === null && !!a0.prompt.title && /baseline/.test(a0.reason), '');
+    const strongHist = [
+      mkA({ wpm: 130, fillerRatePer100: 1, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 30 }, 'wpm'),
+      mkA({ wpm: 140, fillerRatePer100: 0, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 25 }, 'wpm'),
+    ];
+    const aS = assignNext(strongHist, null);
+    ok('assign all-strong stretches', aS.weakest === null && /stretch/i.test(aS.reason), ' got ' + aS.reason);
+    const paceWeak = [mkA({ wpm: 60, fillerRatePer100: 0, repeatCount: 0, fragmentCount: 0, longSentenceCount: 0, wordCount: 25 }, 'wpm')];
+    const aP = assignNext(paceWeak, null);
+    ok('assign pace drill', aP.weakest === 'pace' && aP.prompt.skills.includes('pace'), ' got ' + aP.prompt.id);
+  }
+
+  console.log('ASSIGN-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });
