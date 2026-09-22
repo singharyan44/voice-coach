@@ -64,9 +64,16 @@ Whatever is on fire. If nothing is: Interview Coach spike (engine is ready)
 or visual polish. Submit at end of day. 🎉
 
 ## Explicitly OUT
-Full curriculum math, multimodal build (spike only if ahead — Groq is
-text-only, OpenRouter free was flaky; claims constrained to evidence either
-way), native apps, auth/payments, hand-rolled audio DSP.
+Full curriculum math, native apps, auth/payments, hand-rolled audio DSP.
+
+## Multimodal ✅ BUILT (spike passed → thin slice, same day)
+- Spike: free OpenRouter vision model accepted frames and perceived correctly
+  (needed a bigger token budget — reasoning-style outputs truncate otherwise).
+- Opt-in camera, 3 frames/attempt (start/finish/submit), analyzed then
+  discarded — never stored client- or server-side. Fallback chain
+  vision → text LLM → rules; badge "AI Coach + camera".
+- Visual notes constrained to observable facts by prompt + validation.
+- Real-face quality still needs your camera to judge (untestable headless).
 
 ## Standing rules
 I build, you test + paste logs. Deterministic metrics/compare stay; LLM
