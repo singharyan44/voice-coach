@@ -32,8 +32,7 @@ speechDrillBtn.addEventListener('click', () => {
   if (typeof refreshAssignment === 'function') refreshAssignment();
   log('Journey: debate diagnosis → speech drill');
 });
-const debateSampleForBtn = document.getElementById('debateSampleForBtn');
-const debateSampleAgainstBtn = document.getElementById('debateSampleAgainstBtn');
+const debateSampleBtn = document.getElementById('debateSampleBtn');
 const debateSampleHintEl = document.getElementById('debateSampleHint');
 let debateSampleStreaming = false;
 const speechTabBtn = document.getElementById('speechTabBtn');
@@ -67,47 +66,54 @@ function updateDebateButtons() {
   diagnoseBtn.disabled = busy || userTurns === 0;
   motionSelect.disabled = busy || live;
   Array.from(document.querySelectorAll('input[name="debateSide"]')).forEach((r) => { r.disabled = busy || live; });
-  debateSampleForBtn.disabled = !connected || debateSampleStreaming;
-  debateSampleAgainstBtn.disabled = !connected || debateSampleStreaming;
+  debateSampleBtn.disabled = !connected || debateSampleStreaming;
 }
 
-// Hands-free debate testing: stream a TTS argument clip through the live
-// pipeline (same WebSocket, same Turn handling). Press "Speak argument"
-// first so the round recorder collects the finals.
-async function playDebateSample(url, label) {
+// Hands-free debate testing: the LLM writes a fresh argument for YOUR side,
+// the browser speaks it aloud, and the live mic captures it like real
+// speech. Press "Speak argument" first so the round recorder collects it.
+async function playDebateSample() {
   if (debateSampleStreaming) return;
   if (!debateConnected()) {
     debateSampleHintEl.textContent = 'Connect first, then play a sample.';
     return;
   }
+  if (!debateMotion) {
+    debateSampleHintEl.textContent = 'Start a debate first, then play a sample.';
+    return;
+  }
   if (!debateRecorder.isRecording() && !debateRecorder.isFinishing()) {
-    debateSampleHintEl.textContent = 'Press “Speak argument” first — then play ' + label + ' so it counts toward the round.';
+    debateSampleHintEl.textContent = 'Press “Speak argument” first — then play the sample so it counts toward the round.';
   }
   debateSampleStreaming = true;
   updateDebateButtons();
-  const micPaused = pauseMicCapture();
   try {
-    if (typeof audioCtx === 'undefined' || !audioCtx) throw new Error('Audio not ready — reconnect first.');
-    await audioCtx.resume().catch(() => {});
-    await streamSampleFile({
-      url,
-      audioCtx,
-      ws,
-      monitor: true,
-      onStatus: (t) => { debateSampleHintEl.textContent = t + ' (you should hear it; mic is paused)'; log('Debate sample: ' + t); },
+    const res = await fetch('/api/sample-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'debate-' + debateSide,
+        motion: debateMotion.motion,
+        side: debateSide,
+        coachEngine: selectedEngine(),
+      }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Sample request returned ' + res.status));
+    debateSampleHintEl.textContent = (data.source === 'llm' ? 'Fresh AI-written argument' : 'Built-in argument') +
+      ' for YOUR side — listen, your live mic captures it. (Sound on!)';
+    log('Debate sample (' + data.source + '): ' + data.text.slice(0, 80) + '…');
+    await speakText(data.text);
+    debateSampleHintEl.textContent = 'Sample finished speaking.';
   } catch (e) {
     debateSampleHintEl.textContent = 'Sample failed: ' + e.message;
     log('Debate sample error: ' + e.message);
-  } finally {
-    if (micPaused) resumeMicCapture();
   }
   debateSampleStreaming = false;
   updateDebateButtons();
 }
 
-debateSampleForBtn.addEventListener('click', () => playDebateSample('samples/sample-c-debate-for-16k.wav', 'For sample'));
-debateSampleAgainstBtn.addEventListener('click', () => playDebateSample('samples/sample-d-debate-against-16k.wav', 'Against sample'));
+debateSampleBtn.addEventListener('click', playDebateSample);
 
 async function loadMotions() {
   try {

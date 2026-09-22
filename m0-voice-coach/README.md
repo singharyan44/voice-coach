@@ -31,17 +31,18 @@ Open http://localhost:3000 (Chrome or Edge recommended).
 
 ## Hands-free testing (no mic needed)
 
-The **Test samples** panel streams pre-generated speech clips through the same
-voice pipeline as your microphone — same WebSocket, same Turns, same analysis:
+Sample buttons generate fresh speech on demand and play it aloud through
+your speakers — your live mic captures it like real speech, so the full
+loop (transcript → analysis → retry → comparison) works without speaking:
 
-1. Connect, then press **Start attempt**.
-2. Press **▶ Sample 1** (filler-heavy speech) or **▶ Sample 2** (clean retry).
-3. Wait for the final transcript, press **Finish attempt**.
-4. Use Sample 1 as attempt 1 and Sample 2 as attempt 2 to exercise the full
-   Practice → Feedback → Retry → Comparison loop without speaking.
+1. Connect, then press **Start attempt** (or **Speak argument** in Debate).
+2. Play a sample: filler-heavy / clean retry, or a debate argument written
+   for your current side and motion.
+3. Wait for the final transcript, press **Finish**.
 
-The clips (`public/samples/`, 16 kHz mono WAV, generated with Windows TTS)
-are test fixtures only — no mic audio is replaced in normal use.
+Sample texts are written per request by the configured LLM (`POST
+/api/sample-text`, static fallback included) and spoken with built-in
+browser TTS. Sound must be on; no mic audio is replaced in normal use.
 
 ## What it does
 

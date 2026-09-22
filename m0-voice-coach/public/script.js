@@ -264,6 +264,7 @@ function cleanupAudio() {
   if (worklet) { worklet.disconnect(); worklet = null; }
   if (source) { source.disconnect(); source = null; }
   if (audioCtx) { audioCtx.close().catch(() => {}); audioCtx = null; }
+  try { speechSynthesis.cancel(); } catch (e) { /* ignore */ }
 }
 
 window.addEventListener('pagehide', () => {
@@ -426,7 +427,7 @@ function updateSampleButtons() {
   sampleBBtn.disabled = !connected || sampleStreaming;
 }
 
-async function playSample(url, label) {
+async function playSample(kind, label, topic) {
   if (sampleStreaming) return;
   if (!ws || ws.readyState !== WebSocket.OPEN) {
     sampleHintEl.textContent = 'Connect first, then play a sample.';
@@ -438,46 +439,58 @@ async function playSample(url, label) {
   sampleStreaming = true;
   updateSampleButtons();
   updateAttemptButtons();
-  const micPaused = pauseMicCapture();
   try {
-    if (!audioCtx) audioCtx = new AudioContext({ sampleRate: 16000 });
-    await audioCtx.resume().catch(() => {});
-    await streamSampleFile({
-      url,
-      audioCtx,
-      ws,
-      monitor: true,
-      onStatus: (t) => { sampleHintEl.textContent = t + ' (you should hear it; mic is paused)'; log('Sample: ' + t); },
+    const res = await fetch('/api/sample-text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, topic: topic || null, coachEngine: selectedEngine() }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Sample request returned ' + res.status));
+    sampleHintEl.textContent = (data.source === 'llm' ? 'Fresh AI-written sample' : 'Built-in sample') +
+      ' — listen, your live mic captures it like real speech. (Sound on!)';
+    log('Sample (' + data.source + '): ' + data.text.slice(0, 80) + '…');
+    await speakText(data.text);
+    sampleHintEl.textContent = 'Sample finished speaking.';
   } catch (e) {
     sampleHintEl.textContent = 'Sample failed: ' + e.message;
     log('Sample error: ' + e.message);
-  } finally {
-    if (micPaused) resumeMicCapture();
   }
   sampleStreaming = false;
   updateSampleButtons();
   updateAttemptButtons();
 }
 
-// Shared mic pause/resume for sample playback (speech + debate): the mic
-// worklet keeps running; only its input is detached so AssemblyAI does not
-// receive speaker output twice. Returns whether the mic was paused.
-function pauseMicCapture() {
-  try {
-    if (source && worklet) { source.disconnect(); return true; }
-  } catch (e) { /* ignore */ }
-  return false;
-}
+sampleABtn.addEventListener('click', () => playSample('speech-weak', 'Sample 1', promptTitleEl.textContent + '. ' + promptObjectiveEl.textContent));
+sampleBBtn.addEventListener('click', () => playSample('speech-clean', 'Sample 2', promptTitleEl.textContent + '. ' + promptObjectiveEl.textContent));
 
-function resumeMicCapture() {
-  try {
-    if (source && worklet) source.connect(worklet);
-  } catch (e) { log('Mic resume error: ' + e.message); }
+// Speak text aloud via built-in browser TTS. The LIVE mic captures it, so
+// AssemblyAI transcribes it exactly like user speech. Resolves when done,
+// on error, or if the connection drops mid-speech.
+function speakText(text) {
+  return new Promise((resolve) => {
+    try {
+      if (!('speechSynthesis' in window)) { resolve(); return; }
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'en-US';
+      u.rate = 1;
+      const v = speechSynthesis.getVoices().find((vv) => vv.lang && vv.lang.toLowerCase().startsWith('en'));
+      if (v) u.voice = v;
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearInterval(watch); resolve(); } };
+      u.onend = finish;
+      u.onerror = finish;
+      const watch = setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          try { speechSynthesis.cancel(); } catch (e) { /* ignore */ }
+          finish();
+        }
+      }, 500);
+      speechSynthesis.speak(u);
+    } catch (e) { resolve(); }
+  });
 }
-
-sampleABtn.addEventListener('click', () => playSample('samples/sample-a-weak-16k.wav', 'Sample 1'));
-sampleBBtn.addEventListener('click', () => playSample('samples/sample-b-clean-16k.wav', 'Sample 2'));
 
 async function checkHealth() {
   try {

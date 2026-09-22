@@ -11,6 +11,7 @@ const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { buildHealth } = require('../coach/health');
 const { buildProfile } = require('../coach/profile');
 const { assignNext } = require('../coach/assign');
+const { generateSampleText, staticSample } = require('../coach/sample-text');
 const { MOTIONS, getMotion, stockChallenge, diagnoseRules } = require('../coach/debate');
 const { opponentReply, diagnoseDebate } = require('../coach/debate-llm');
 const { compareAttempts } = require('../coach/compare');
@@ -92,6 +93,33 @@ app.post('/api/sessions', (req, res) => {
   const session = createSession(prompt);
   res.json({ sessionId: session.id, prompt: session.prompt });
 });
+
+// Fresh practice sample text, written by the LLM per request (or a static
+// fallback). The browser speaks it aloud; the live mic captures it.
+app.post('/api/sample-text', async (req, res) => {
+  const body = req.body || {};
+  const kind = body.kind;
+  if (!staticSampleSafe(kind)) return res.status(400).json({ error: 'Unknown sample kind.' });
+  if (body.coachEngine === 'rules') {
+    return res.json({ text: staticSample(kind), source: 'static' });
+  }
+  try {
+    const out = await generateSampleText({
+      kind,
+      topic: body.topic,
+      motion: body.motion,
+      side: body.side,
+    });
+    res.json({ text: out.text, source: 'llm' });
+  } catch (err) {
+    console.error('Sample-text LLM unavailable, using static fallback:', err.message);
+    res.json({ text: staticSample(kind), source: 'static', fallback: true });
+  }
+});
+
+function staticSampleSafe(kind) {
+  try { staticSample(kind); return true; } catch (e) { return false; }
+}
 
 // Adaptive assignment: weakest skill → targeted next exercise. Stateless —
 // the browser sends its history, the server answers with prompt + reason.

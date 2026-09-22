@@ -63,7 +63,7 @@
         <button id="sampleABtn" class="btn btn-small">▶ Sample 1 (filler-heavy)</button>
         <button id="sampleBBtn" class="btn btn-small">▶ Sample 2 (clean retry)</button>
       </div>
-      <div id="sampleHint" class="hint">Connect + Start attempt first, then play a sample — you will hear it while it streams through the voice pipeline (mic pauses meanwhile).</div>
+      <div id="sampleHint" class="hint">Connect + Start attempt first, then play a sample — the app writes fresh speech and reads it aloud; your live mic captures it.</div>
     </section>
 
     <div class="panels">
@@ -124,11 +124,10 @@
           <button id="rematchBtn" class="btn btn-small">Rematch (swap sides)</button>
         </div>
         <div class="row">
-          <button id="debateSampleForBtn" class="btn btn-small">▶ Argue For (sample)</button>
-          <button id="debateSampleAgainstBtn" class="btn btn-small">▶ Argue Against (sample)</button>
+          <button id="debateSampleBtn" class="btn btn-small">▶ Sample argument (my side)</button>
         </div>
         <div id="debateHint" class="hint"></div>
-        <div id="debateSampleHint" class="hint">No mic needed: press “Speak argument” first, then play a sample — you will hear it while it streams (mic pauses).</div>
+        <div id="debateSampleHint" class="hint">No mic needed: the app writes a fresh argument for your side and reads it aloud — your live mic captures it like real speech.</div>
       </section>
 
       <section class="panel" id="debateDiagnosisPanel" hidden>
@@ -144,7 +143,6 @@
   </div>
 
   <script src="attempt-recorder.js"></script>
-  <script src="sample-player.js"></script>
   <script src="script.js"></script>
   <script src="debate.js"></script>
 </body>

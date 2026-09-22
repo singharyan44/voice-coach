@@ -23,7 +23,7 @@ for (const s of scripts) {
   console.log((found ? 'OK   file ' : 'MISS file ') + s);
 }
 // Required M1 controls must be real buttons in the DOM.
-for (const id of ['connectBtn', 'startAttemptBtn', 'finishAttemptBtn', 'retryBtn', 'newPromptBtn', 'sampleABtn', 'sampleBBtn', 'practiceAssignedBtn', 'debateStartBtn', 'roundStartBtn', 'roundFinishBtn', 'diagnoseBtn', 'rematchBtn', 'debateSampleForBtn', 'debateSampleAgainstBtn', 'debateCtaBtn', 'speechDrillBtn']) {  const re = new RegExp('<button[^>]*id="' + id + '"[^>]*>', 'i');
+for (const id of ['connectBtn', 'startAttemptBtn', 'finishAttemptBtn', 'retryBtn', 'newPromptBtn', 'sampleABtn', 'sampleBBtn', 'practiceAssignedBtn', 'debateStartBtn', 'roundStartBtn', 'roundFinishBtn', 'diagnoseBtn', 'rematchBtn', 'debateSampleBtn', 'debateCtaBtn', 'speechDrillBtn']) {  const re = new RegExp('<button[^>]*id="' + id + '"[^>]*>', 'i');
   const found = re.test(html);
   if (!found) bad++;
   console.log((found ? 'OK   button ' : 'MISS button ') + id);

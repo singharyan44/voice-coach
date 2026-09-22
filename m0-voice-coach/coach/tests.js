@@ -11,8 +11,8 @@ const { getProviderConfig } = require('./llm/provider');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
 const { analyzeAttemptForSession } = require('./coach-engine');
 const { buildHealth } = require('./health');
-const { chunkPCM16 } = require('../public/sample-player');
 const { buildProfile, skillVerdicts } = require('./profile');
+const { generateSampleText, staticSample } = require('./sample-text');
 const { assignNext } = require('./assign');
 const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge, diagnoseRules } = require('./debate');
 const { opponentReply, diagnoseDebate } = require('./debate-llm');
@@ -276,18 +276,46 @@ if (fail) process.exit(1);
 
   console.log('HEALTH-RESULT pass=' + pass + ' fail=' + fail);
 
-  // ---------- sample chunking (50–1000 ms rule) ----------
+  // ---------- on-the-fly sample texts ----------
   {
-    const exact = chunkPCM16(new Int16Array(4800), 1600);
-    ok('chunk exact', exact.chunks.length === 3 && exact.chunks.every((c) => c.length === 1600) && exact.tail === 0, '');
-    const withValidTail = chunkPCM16(new Int16Array(4800 + 1000), 1600);
-    ok('chunk valid tail sent', withValidTail.chunks.length === 4 && withValidTail.chunks[3].length === 1000 && withValidTail.tail === 0, '');
-    const withShortTail = chunkPCM16(new Int16Array(4800 + 799), 1600);
-    ok('chunk short tail held', withShortTail.chunks.length === 3 && withShortTail.tail === 799, '');
-    const tiny = chunkPCM16(new Int16Array(100), 1600);
-    ok('chunk tiny held', tiny.chunks.length === 0 && tiny.tail === 100, '');
-    const boundary = chunkPCM16(new Int16Array(1600 + 800), 1600);
-    ok('chunk 50ms boundary', boundary.chunks.length === 2 && boundary.tail === 0, '');
+    ok('sample static all kinds', ['speech-weak', 'speech-clean', 'debate-for', 'debate-against'].every((k) => {
+      const t = staticSample(k);
+      return typeof t === 'string' && t.length >= 20;
+    }), '');
+    let threwKind = false;
+    try { staticSample('nope'); } catch (e) { threwKind = true; }
+    ok('sample static unknown throws', threwKind);
+    let threwGen = false;
+    try {
+      await generateSampleText({ kind: 'nope' }, { env: {} });
+    } catch (e) { threwGen = true; }
+    ok('sample unknown kind throws', threwGen);
+    let threwUncfg = false;
+    try {
+      await generateSampleText({ kind: 'speech-clean', topic: 'weekends' }, { env: {} });
+    } catch (e) { threwUncfg = /No LLM provider/.test(e.message); }
+    ok('sample unconfigured throws', threwUncfg);
+    const mockText = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ text: 'My weekend was quiet and restful, and I spent most of it reading outside.' }) } }] }),
+    });
+    const gen = await generateSampleText(
+      { kind: 'speech-clean', topic: 'weekends' },
+      { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: mockText, timeoutMs: 2000 }
+    );
+    ok('sample mocked LLM', gen.text.includes('weekend') && gen.provider === 'groq', '');
+    const mockBad = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ text: 'x' }) } }] }),
+    });
+    let threwBad = false;
+    try {
+      await generateSampleText(
+        { kind: 'speech-clean' },
+        { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: mockBad, timeoutMs: 2000 }
+      );
+    } catch (e) { threwBad = true; }
+    ok('sample invalid text throws', threwBad);
   }
 
   console.log('SAMPLE-RESULT pass=' + pass + ' fail=' + fail);
