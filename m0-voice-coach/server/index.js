@@ -11,6 +11,8 @@ const { analyzeAttemptForSession } = require('../coach/coach-engine');
 const { buildHealth } = require('../coach/health');
 const { buildProfile } = require('../coach/profile');
 const { assignNext } = require('../coach/assign');
+const { MOTIONS, getMotion, stockChallenge, diagnoseRules } = require('../coach/debate');
+const { opponentReply, diagnoseDebate } = require('../coach/debate-llm');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -195,4 +197,100 @@ app.get('/api/sessions/:id/comparison', (req, res) => {
   const prev = session.attempts[session.attempts.length - 2];
   const curr = session.attempts[session.attempts.length - 1];
   res.json(compareAttempts(prev.analysis, curr.analysis, prev.analysis.retry_focus));
+});
+
+// ---------------- Debate Coach (stateless; same TrainingEngine loop) ----------------
+
+app.get('/api/debate/motions', (req, res) => {
+  res.json({ motions: MOTIONS });
+});
+
+function debateEngine(req) {
+  return req.body && req.body.coachEngine === 'rules' ? 'rules' : 'ai';
+}
+
+// One opponent move: analyze the user's argument, attack its weakest part.
+app.post('/api/debate/opponent', async (req, res) => {
+  const body = req.body || {};
+  const motion = getMotion(body.motionId);
+  if (!motion) return res.status(400).json({ error: 'Unknown motion. Pick one from /api/debate/motions.' });
+  if (body.userSide !== 'for' && body.userSide !== 'against') {
+    return res.status(400).json({ error: 'userSide must be "for" or "against".' });
+  }
+  const transcript = (body.userTranscript || '').trim();
+  if (!transcript) return res.status(400).json({ error: 'Empty argument — speak before ending the round.' });
+  const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
+  // Delivery metrics for this spoken turn (powers diagnosis + history).
+  const roundMs = Number(body.durationMs);
+  const metrics = computeMetrics({
+    transcript,
+    durationMs: Number.isFinite(roundMs) && roundMs >= 0 ? roundMs : 0,
+    turnCount: Number.isFinite(Number(body.turnCount)) && Number(body.turnCount) > 0 ? Math.floor(Number(body.turnCount)) : 1,
+  });
+
+  if (debateEngine(req) === 'rules') {
+    const round = history.filter((h) => h.speaker === 'user').length;
+    return res.json({
+      attack: stockChallenge(round),
+      weakestComponent: null,
+      argument: null,
+      source: 'rules',
+      metrics,
+    });
+  }
+  try {
+    const out = await opponentReply({
+      motion,
+      userSide: body.userSide,
+      userTranscript: transcript,
+      history,
+    });
+    res.json({
+      attack: out.attack,
+      weakestComponent: out.weakest_component,
+      argument: out.argument,
+      source: 'llm',
+      metrics,
+    });
+  } catch (err) {
+    console.error('Debate opponent unavailable, using stock challenge:', err.message);
+    const round = history.filter((h) => h.speaker === 'user').length;
+    res.json({
+      attack: stockChallenge(round),
+      weakestComponent: null,
+      argument: null,
+      source: 'rules',
+      fallback: true,
+      metrics,
+    });
+  }
+});
+
+// Diagnose a completed debate: argument scorecard + retry focus.
+app.post('/api/debate/diagnose', async (req, res) => {
+  const body = req.body || {};
+  const motion = getMotion(body.motionId);
+  if (!motion) return res.status(400).json({ error: 'Unknown motion.' });
+  if (body.userSide !== 'for' && body.userSide !== 'against') {
+    return res.status(400).json({ error: 'userSide must be "for" or "against".' });
+  }
+  const exchanges = Array.isArray(body.exchanges) ? body.exchanges.slice(-20) : [];
+  const userTurns = exchanges.filter((e) => e.speaker === 'user' && e.text && e.text.trim());
+  if (userTurns.length === 0) return res.status(400).json({ error: 'No user arguments to diagnose yet.' });
+  const delivery = Array.isArray(body.delivery) ? body.delivery.slice(-10) : [];
+
+  if (debateEngine(req) === 'rules') {
+    return res.json({ diagnosis: diagnoseRules({ userTurns: userTurns.map((t) => t.text), metricsList: delivery }), source: 'rules' });
+  }
+  try {
+    const out = await diagnoseDebate({ motion, userSide: body.userSide, exchanges, delivery });
+    res.json({ diagnosis: out, source: 'llm' });
+  } catch (err) {
+    console.error('Debate diagnosis unavailable, using deterministic fallback:', err.message);
+    res.json({
+      diagnosis: diagnoseRules({ userTurns: userTurns.map((t) => t.text), metricsList: delivery }),
+      source: 'rules',
+      fallback: true,
+    });
+  }
 });

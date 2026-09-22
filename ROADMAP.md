@@ -41,13 +41,14 @@ weaknesses / top focus / trends) + History + Profile panels.
 - UI: "Up next — assigned for you" card + Practice-this flow.
 - Validated: 97/97 unit tests, DOM check, live assign + promptId session.
 
-## Days 3–5 — Debate Coach v1 (flagship: training partner, NOT sparring bot)
-- Loop: user argues → opponent identifies the actual argument → attacks its
-  weakest component (unsupported claim / weak evidence / contradiction /
-  unanswered rebuttal) → user responds → coach diagnoses the exchange →
-  next drill targets the demonstrated weakness.
-- Done when: argue → challenged on YOUR specific weakness → respond →
-  re-analysis shows movement.
+## Days 3–5 — Debate Coach v1 ✅ DONE (training partner, NOT sparring bot)
+- Loop: argue (voice) → opponent identifies the argument → attacks weakest
+  component → respond → diagnose → rematch with swapped sides.
+- Reuses TrainingEngine: recorder boundaries, speech metrics per turn, AI/Rules
+  routing, truthful fallback (stock challenges), deterministic rules diagnosis.
+- UI: Speech/Debate mode tabs, motion picker + side picker, thread, scorecard.
+- Validated: 111/111 unit tests (contracts, fallback, mocked LLM), DOM check,
+  live motions/opponent/diagnose + 400 guards.
 
 ## Day 6 — Integration + demo path (not mobile polish)
 Make the complete journey stupidly obvious, first visit to profile update:

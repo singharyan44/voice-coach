@@ -94,3 +94,18 @@ models can be slow or temporarily unavailable; the fallback covers that too.
 ## Docs referenced
 
 - https://www.assemblyai.com/docs/streaming (quickstart, temp tokens, WebSocket API)
+
+## Debate Coach (training partner, not sparring bot)
+
+Pick a motion + side, argue out loud round by round. After each round the
+opponent identifies your actual argument and attacks its weakest component
+(unsupported claim, weak evidence, broken reasoning, vague definitions, or
+an unanswered rebuttal). Diagnose the debate for a scorecard (claims made /
+supported, rebuttals answered) plus a retry focus, then rematch with sides
+swapped. Same engine as Speech: AssemblyAI turns, deterministic delivery
+metrics, AI/Rules selector with truthful fallback. Without an LLM key the
+opponent spars with rotating stock challenges (clearly labeled).
+
+- `GET /api/debate/motions`
+- `POST /api/debate/opponent` → `{ attack, weakestComponent, argument, source, metrics }`
+- `POST /api/debate/diagnose` → `{ diagnosis, source }`

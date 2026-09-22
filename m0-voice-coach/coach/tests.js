@@ -14,6 +14,8 @@ const { buildHealth } = require('./health');
 const { chunkPCM16 } = require('../public/sample-player');
 const { buildProfile, skillVerdicts } = require('./profile');
 const { assignNext } = require('./assign');
+const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge, diagnoseRules } = require('./debate');
+const { opponentReply, diagnoseDebate } = require('./debate-llm');
 
 let pass = 0, fail = 0;
 const ok = (name, cond, extra) => {
@@ -347,5 +349,62 @@ if (fail) process.exit(1);
   }
 
   console.log('ASSIGN-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- debate coach ----------
+  {
+    ok('debate motions', MOTIONS.length >= 6 && MOTIONS.every((m) => m.id && m.motion), '');
+    ok('debate getMotion', getMotion('ai-education').motion.includes('AI') && getMotion('nope') === null, '');
+    const opp = validateOpponent({ argument: { claim: 'AI helps.', evidence: ['Study X.'], reasoning: 'Because Y.' }, weakest_component: 'evidence', attack: 'Study X was tiny and old — got anything representative?' });
+    ok('debate opponent valid', opp.weakest_component === 'evidence' && opp.argument.evidence.length === 1, '');
+    for (const [name, bad] of [
+      ['no attack', { argument: { claim: 'C' }, weakest_component: 'claim', attack: '' }],
+      ['short attack', { argument: { claim: 'C' }, weakest_component: 'claim', attack: 'No.' }],
+      ['bad component', { argument: { claim: 'C' }, weakest_component: 'vibes', attack: 'This is a sufficiently long attack on your position here.' }],
+      ['no claim', { argument: {}, weakest_component: 'claim', attack: 'This is a sufficiently long attack on your position here.' }],
+    ]) {
+      let threw = false;
+      try { validateOpponent(bad); } catch (e) { threw = true; }
+      ok('debate opponent invalid: ' + name, threw);
+    }
+    const dg = validateDiagnosis({ strengths: ['Sustained.'], areas_to_improve: ['Evidence thin.'], actionable_feedback: ['Cite one study.'], retry_focus: { focus: 'Support claims.', targets: ['evidence'], tip: 'One claim, one source.' }, scorecard: { claims_made: 2, claims_supported: 1, rebuttals_addressed: 0, rounds: 2 } });
+    ok('debate diagnosis valid', dg.scorecard.claims_made === 2 && dg.retry_focus.targets[0] === 'evidence', '');
+    let threwDg = false;
+    try { validateDiagnosis({ strengths: [], areas_to_improve: ['x'], actionable_feedback: ['y'], retry_focus: { focus: 'f', targets: [], tip: '' } }); } catch (e) { threwDg = true; }
+    ok('debate diagnosis invalid empty', threwDg);
+    ok('debate stock rotates', stockChallenge(0) !== stockChallenge(1) && typeof stockChallenge(7) === 'string', '');
+    const dr = diagnoseRules({ userTurns: ['I argue X because Y.', 'Also Z.'], metricsList: [{ wordCount: 20, fillerCount: 2 }, { wordCount: 25, fillerCount: 0 }] });
+    ok('debate rules diagnosis', dr.strengths.length > 0 && dr.scorecard.rounds === 2 && dr.retry_focus.targets.length === 0, '');
+
+    // mocked LLM opponent + diagnosis (no network)
+    const mockOpp = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ argument: { claim: 'AI helps.', evidence: [], reasoning: 'Scale.' }, weakest_component: 'evidence', attack: 'No evidence offered — name one study with real students behind it.' }) } }] }),
+    });
+    const fetchOpp = async (url, opts) => mockOpp(url, opts);
+    const oppOut = await opponentReply(
+      { motion: getMotion('ai-education'), userSide: 'for', userTranscript: 'AI helps students.', history: [] },
+      { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: fetchOpp, timeoutMs: 2000 }
+    );
+    ok('debate mocked opponent', oppOut.weakest_component === 'evidence' && oppOut.provider === 'groq', '');
+    const mockDg = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ strengths: ['Two rounds sustained.'], areas_to_improve: ['No evidence cited.'], actionable_feedback: ['Cite one source.'], retry_focus: { focus: 'Support claims.', targets: ['evidence'], tip: 'One claim, one source.' }, scorecard: { claims_made: 2, claims_supported: 0, rebuttals_addressed: 1, rounds: 2 } }) } }] }),
+    });
+    const dgOut = await diagnoseDebate(
+      { motion: getMotion('ai-education'), userSide: 'for', exchanges: [{ speaker: 'user', text: 'AI helps.' }], delivery: [] },
+      { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: mockDg, timeoutMs: 2000 }
+    );
+    ok('debate mocked diagnosis', dgOut.scorecard.rounds === 2 && dgOut.retry_focus.targets[0] === 'evidence', '');
+    let threwOpp = false;
+    try {
+      await opponentReply(
+        { motion: getMotion('ai-education'), userSide: 'for', userTranscript: 'AI helps.', history: [] },
+        { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: async () => { throw new Error('down'); }, timeoutMs: 2000 }
+      );
+    } catch (e) { threwOpp = true; }
+    ok('debate opponent failure throws', threwOpp);
+  }
+
+  console.log('DEBATE-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

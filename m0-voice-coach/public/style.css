@@ -103,4 +103,28 @@ h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
 .engine-option { font-size: 0.88rem; font-weight: 600; color: #e2e8f0; display: inline-flex; align-items: center; gap: 0.3rem; cursor: pointer; }
 .engine-option input { accent-color: #22d3ee; }
 .engine-option input:disabled + span, .engine-option:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
+/* Debate mode (additive) */
+#motionSelect {
+  background: rgba(2,6,23,0.5);
+  color: #e2e8f0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+  max-width: 100%;
+}
+#debateThread { max-height: 320px; overflow-y: auto; margin-bottom: 0.5rem; }
+.thread-msg {
+  background: rgba(2,6,23,0.5);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.thread-msg.user { border-left: 3px solid #22d3ee; }
+.thread-msg.opponent { border-left: 3px solid #f59e0b; }
+.mode-tab-active { outline: 2px solid #22d3ee; }
 @media (max-width: 640px) { .panels { grid-template-columns: 1fr; } }

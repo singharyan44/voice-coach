@@ -1,0 +1,263 @@
+// Debate Coach v1 client (Days 3–5). Reuses the TrainingEngine loop:
+// AttemptRecorder turn boundaries, selectedEngine(), history/profile,
+// .feedback styles. Speech flow in script.js forwards Turn events here.
+let debateMotion = null;
+let debateSide = 'for';
+let debateExchanges = [];
+let debateDelivery = [];
+let debateThinking = false;
+const debateRecorder = new AttemptRecorder();
+
+const motionSelect = document.getElementById('motionSelect');
+const motionContextEl = document.getElementById('motionContext');
+const debateStartBtn = document.getElementById('debateStartBtn');
+const debateSetupHint = document.getElementById('debateSetupHint');
+const debateArenaPanel = document.getElementById('debateArenaPanel');
+const debateStateEl = document.getElementById('debateState');
+const debateThread = document.getElementById('debateThread');
+const roundStartBtn = document.getElementById('roundStartBtn');
+const roundFinishBtn = document.getElementById('roundFinishBtn');
+const diagnoseBtn = document.getElementById('diagnoseBtn');
+const rematchBtn = document.getElementById('rematchBtn');
+const debateHintEl = document.getElementById('debateHint');
+const debateDiagnosisPanel = document.getElementById('debateDiagnosisPanel');
+const debateDiagnosisBox = document.getElementById('debateDiagnosisBox');
+const speechTabBtn = document.getElementById('speechTabBtn');
+const debateTabBtn = document.getElementById('debateTabBtn');
+
+function setDebateMode(speech) {
+  document.getElementById('speechMode').hidden = !speech;
+  document.getElementById('debateMode').hidden = speech;
+  speechTabBtn.classList.toggle('mode-tab-active', speech);
+  debateTabBtn.classList.toggle('mode-tab-active', !speech);
+}
+speechTabBtn.addEventListener('click', () => setDebateMode(true));
+debateTabBtn.addEventListener('click', () => setDebateMode(false));
+
+function setDebateState(text, active) {
+  debateStateEl.textContent = text;
+  debateStateEl.classList.toggle('state-active', !!active);
+}
+
+function debateConnected() {
+  return typeof ws !== 'undefined' && ws && ws.readyState === WebSocket.OPEN;
+}
+
+function updateDebateButtons() {
+  const connected = debateConnected();
+  const busy = debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking;
+  const live = debateExchanges.length > 0;
+  roundStartBtn.disabled = busy || !connected;
+  roundFinishBtn.disabled = !debateRecorder.isRecording() || !connected;
+  const userTurns = debateExchanges.filter((e) => e.speaker === 'user').length;
+  diagnoseBtn.disabled = busy || userTurns === 0;
+  motionSelect.disabled = busy || live;
+  Array.from(document.querySelectorAll('input[name="debateSide"]')).forEach((r) => { r.disabled = busy || live; });
+}
+
+async function loadMotions() {
+  try {
+    const res = await fetch('/api/debate/motions');
+    const data = await res.json();
+    if (!res.ok) throw new Error('motions returned ' + res.status);
+    motionSelect.innerHTML = data.motions.map((m) =>
+      '<option value="' + m.id + '">' + escapeHtml(m.motion) + '</option>').join('');
+    showMotionContext();
+  } catch (e) {
+    debateSetupHint.textContent = 'Could not load motions: ' + e.message;
+  }
+}
+
+function showMotionContext() {
+  const opt = motionSelect.options[motionSelect.selectedIndex];
+  motionContextEl.textContent = opt ? opt.text : '';
+}
+motionSelect.addEventListener('change', showMotionContext);
+
+function debateSideValue() {
+  const c = document.querySelector('input[name="debateSide"]:checked');
+  return c && c.value === 'against' ? 'against' : 'for';
+}
+
+debateStartBtn.addEventListener('click', () => {
+  const id = motionSelect.value;
+  if (!id) { debateSetupHint.textContent = 'Pick a motion first.'; return; }
+  debateMotion = { id, motion: motionSelect.options[motionSelect.selectedIndex].text };
+  debateSide = debateSideValue();
+  debateExchanges = [];
+  debateDelivery = [];
+  debateRecorder.resetToIdle();
+  debateThread.innerHTML = '';
+  debateDiagnosisPanel.hidden = true;
+  debateArenaPanel.hidden = false;
+  setDebateState('Ready', false);
+  debateHintEl.textContent = 'You argue ' + debateSide.toUpperCase() + ': "' + debateMotion.motion + '". Press “Speak argument”, make your case, then “Finish round”.';
+  log('Debate started: ' + debateMotion.motion + ' (' + debateSide + ')');
+  updateDebateButtons();
+});
+
+roundStartBtn.addEventListener('click', () => {
+  if (!debateMotion || debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking) return;
+  if (!debateConnected()) { debateHintEl.textContent = 'Connect first (same connection as Speech).'; return; }
+  debateRecorder.start(Date.now());
+  setDebateState('Recording', true);
+  debateHintEl.textContent = 'Recording your argument — speak now, then “Finish round”.';
+  updateDebateButtons();
+  log('Debate round recording started');
+});
+
+roundFinishBtn.addEventListener('click', () => {
+  const r = debateRecorder.finish(Date.now());
+  updateDebateButtons();
+  if (r.status === 'submitted') {
+    submitDebateRound(r.attempt);
+  } else if (r.status === 'waiting') {
+    setDebateState('Finishing…', true);
+    debateHintEl.textContent = 'Finishing… waiting for the final transcript.';
+  } else if (r.status === 'empty') {
+    debateHintEl.textContent = 'No speech recorded — press “Speak argument” first, then speak while Recording.';
+  }
+});
+
+// Called from script.js handleMessage for every Turn event.
+function debateOnPartial(text, order) {
+  if (debateRecorder.isRecording()) debateRecorder.onTurn({ text, final: false, order });
+  return null;
+}
+
+function debateOnFinal(text, order) {
+  if (!debateRecorder.isRecording() && !debateRecorder.isFinishing()) return null;
+  const done = debateRecorder.onTurn({ text, final: true, order });
+  if (done) submitDebateRound(done);
+  return null;
+}
+
+function appendThreadMsg(speaker, text, meta) {
+  const div = document.createElement('div');
+  div.className = 'thread-msg ' + (speaker === 'user' ? 'user' : 'opponent');
+  div.innerHTML = '<strong>' + (speaker === 'user' ? 'You' : 'Opponent') + ':</strong> ' +
+    escapeHtml(text) + (meta ? '<br><span class="hint">' + escapeHtml(meta) + '</span>' : '');
+  debateThread.appendChild(div);
+  debateThread.scrollTop = debateThread.scrollHeight;
+}
+
+async function submitDebateRound({ transcript, turnCount, durationMs }) {
+  debateThinking = true;
+  setDebateState('Opponent thinking…', true);
+  debateHintEl.textContent = 'Your argument is with the opponent…';
+  updateDebateButtons();
+  try {
+    const res = await fetch('/api/debate/opponent', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        motionId: debateMotion.id,
+        userSide: debateSide,
+        userTranscript: transcript,
+        history: debateExchanges,
+        coachEngine: selectedEngine(),
+        durationMs,
+        turnCount,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Opponent returned ' + res.status));
+    debateExchanges.push({ speaker: 'user', text: transcript });
+    debateExchanges.push({ speaker: 'opponent', text: data.attack });
+    debateDelivery.push(data.metrics);
+    saveAttemptToHistory({
+      promptTitle: 'Debate: ' + debateMotion.motion,
+      transcript,
+      metrics: data.metrics,
+      analysis: null,
+      coachSource: data.source === 'llm' ? 'llm' : 'rules',
+      requestedEngine: selectedEngine(),
+      createdAt: new Date().toISOString(),
+    });
+    renderHistory(loadHistory());
+    refreshProfile();
+    appendThreadMsg('user', transcript, null);
+    const meta = (data.weakestComponent ? 'attacked: ' + data.weakestComponent + ' · ' : '') +
+      (data.source === 'llm' ? 'AI Coach' : (data.fallback ? 'Rules sparring — AI fallback' : 'Rules sparring'));
+    appendThreadMsg('opponent', data.attack, meta);
+    setDebateState('Your turn', false);
+    debateHintEl.textContent = 'Your turn — “Speak argument” to respond, or “Diagnose debate” after 2+ rounds.';
+    log('Opponent replied (weakest: ' + (data.weakestComponent || 'n/a') + ')');
+  } catch (e) {
+    debateHintEl.textContent = 'Opponent failed: ' + e.message;
+    setDebateState('Ready', false);
+    log('Opponent error: ' + e.message);
+  }
+  debateThinking = false;
+  updateDebateButtons();
+}
+
+diagnoseBtn.addEventListener('click', async () => {
+  const userTurns = debateExchanges.filter((e) => e.speaker === 'user').length;
+  if (userTurns === 0 || debateThinking) return;
+  setDebateState('Diagnosing…', true);
+  debateHintEl.textContent = 'Diagnosing the debate…';
+  updateDebateButtons();
+  try {
+    const res = await fetch('/api/debate/diagnose', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        motionId: debateMotion.id,
+        userSide: debateSide,
+        exchanges: debateExchanges,
+        delivery: debateDelivery,
+        coachEngine: selectedEngine(),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || ('Diagnose returned ' + res.status));
+    renderDebateDiagnosis(data.diagnosis, data.source);
+    setDebateState('Diagnosed', false);
+    debateHintEl.textContent = 'Diagnosis ready. Rematch to argue the other side, or keep debating.';
+  } catch (e) {
+    debateHintEl.textContent = 'Diagnosis failed: ' + e.message;
+    setDebateState('Your turn', false);
+    log('Diagnose error: ' + e.message);
+  }
+  updateDebateButtons();
+});
+
+function renderDebateDiagnosis(d, source) {
+  const li = (items) => items.map((t) => '<li>' + escapeHtml(t) + '</li>').join('');
+  const sc = d.scorecard || {};
+  const badge = source === 'llm' ? '<span class="hint">AI Coach</span>' : '<span class="hint">Rules Coach</span>';
+  debateDiagnosisBox.innerHTML = '<div class="feedback">' +
+    '<h3>Debate scorecard ' + badge + '</h3>' +
+    '<div class="metrics">' +
+    '<span class="metric">' + (sc.rounds || 0) + ' rounds</span>' +
+    '<span class="metric">' + (sc.claims_made || 0) + ' claims</span>' +
+    '<span class="metric">' + (sc.claims_supported || 0) + ' supported</span>' +
+    '<span class="metric">' + (sc.rebuttals_addressed || 0) + ' rebuttals answered</span>' +
+    '</div>' +
+    (d.strengths.length ? '<h3>Strengths</h3><ul>' + li(d.strengths) + '</ul>' : '') +
+    (d.areas_to_improve.length ? '<h3>Work on</h3><ul>' + li(d.areas_to_improve) + '</ul>' : '') +
+    (d.actionable_feedback.length ? '<h3>Do next time</h3><ul>' + li(d.actionable_feedback) + '</ul>' : '') +
+    '<div class="retry-focus"><strong>Retry focus:</strong> ' + escapeHtml(d.retry_focus.focus) +
+    '<br><span class="hint">' + escapeHtml(d.retry_focus.tip) + '</span></div>' +
+    '</div>';
+  debateDiagnosisPanel.hidden = false;
+}
+
+rematchBtn.addEventListener('click', () => {
+  if (!debateMotion || debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking) return;
+  debateSide = debateSide === 'for' ? 'against' : 'for';
+  document.querySelector('input[name="debateSide"][value="' + debateSide + '"]').checked = true;
+  debateExchanges = [];
+  debateDelivery = [];
+  debateRecorder.resetToIdle();
+  debateThread.innerHTML = '';
+  debateDiagnosisPanel.hidden = true;
+  setDebateState('Ready', false);
+  debateHintEl.textContent = 'Rematch — now you argue ' + debateSide.toUpperCase() + '. Press “Speak argument”.';
+  log('Debate rematch, sides swapped (' + debateSide + ')');
+  updateDebateButtons();
+});
+
+loadMotions();
+updateDebateButtons();

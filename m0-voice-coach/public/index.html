@@ -16,6 +16,12 @@
 
     <button id="connectBtn" class="btn">Connect</button>
 
+    <div class="row">
+      <button id="speechTabBtn" class="btn btn-small">Speech Coach</button>
+      <button id="debateTabBtn" class="btn btn-small">Debate Coach</button>
+    </div>
+
+    <div id="speechMode">
     <section class="panel prompt-panel">
       <h2>Practice prompt</h2>
       <div id="promptTitle" class="prompt-title">Loading prompt…</div>
@@ -84,6 +90,43 @@
       <h2>History</h2>
       <div id="historyBox" class="hint">No attempts yet — your practice history will appear here and survive reloads.</div>
     </section>
+    </div><!-- /speechMode -->
+
+    <div id="debateMode" hidden>
+      <section class="panel">
+        <h2>Debate setup</h2>
+        <div class="row">
+          <select id="motionSelect"></select>
+        </div>
+        <div id="motionContext" class="hint"></div>
+        <div class="row engine-row">
+          <span class="engine-label">Your side</span>
+          <label class="engine-option"><input type="radio" name="debateSide" value="for" checked> For</label>
+          <label class="engine-option"><input type="radio" name="debateSide" value="against"> Against</label>
+        </div>
+        <div class="row">
+          <button id="debateStartBtn" class="btn btn-small">Start debate</button>
+        </div>
+        <div id="debateSetupHint" class="hint">Same coach engine as Speech (AI/Rules above). Opponent replies in text; you argue out loud.</div>
+      </section>
+
+      <section class="panel" id="debateArenaPanel" hidden>
+        <h2>Debate <span id="debateState" class="state-pill">Ready</span></h2>
+        <div id="debateThread"></div>
+        <div class="row">
+          <button id="roundStartBtn" class="btn btn-small">Speak argument</button>
+          <button id="roundFinishBtn" class="btn btn-small" disabled>Finish round</button>
+          <button id="diagnoseBtn" class="btn btn-small" disabled>Diagnose debate</button>
+          <button id="rematchBtn" class="btn btn-small">Rematch (swap sides)</button>
+        </div>
+        <div id="debateHint" class="hint"></div>
+      </section>
+
+      <section class="panel" id="debateDiagnosisPanel" hidden>
+        <h2>Debate diagnosis</h2>
+        <div id="debateDiagnosisBox"></div>
+      </section>
+    </div><!-- /debateMode -->
 
     <div id="log" class="log"></div>
   </div>
@@ -91,5 +134,6 @@
   <script src="attempt-recorder.js"></script>
   <script src="sample-player.js"></script>
   <script src="script.js"></script>
+  <script src="debate.js"></script>
 </body>
 </html>
