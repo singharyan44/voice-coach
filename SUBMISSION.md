@@ -9,14 +9,17 @@ A real-time voice coach: speak, get specific feedback, retry, and see exactly
 what improved — powered by AssemblyAI streaming transcription.
 
 ## Description (copy-paste)
-Voice Coach turns speaking practice into a measurable loop. Pick a prompt,
-speak, and get instant analysis grounded in real metrics — pace (WPM), filler
-words, repeated words, and sentence structure — never generic praise. Each
-attempt ends with one clear retry focus; speak again and the app compares both
-attempts side by side: what improved, what stayed the same, what to work on
-next. Choose between AI coaching (Groq/OpenRouter) with automatic fallback to
-a built-in deterministic coach, so feedback never breaks. Test hands-free with
-built-in sample clips that stream through the same live voice pipeline.
+Voice Coach turns speaking practice into a measurable, adaptive loop. Pick a
+prompt, speak, and get instant analysis grounded in real metrics — pace (WPM),
+filler words, repeated words, and sentence structure — never generic praise.
+Each attempt ends with one clear retry focus; speak again and the app compares
+both attempts side by side. The system tracks your profile across sessions
+and assigns the next exercise targeting YOUR weakest skill. Two more coaches
+share the same engine: Debate Coach argues against you, attacking your
+argument's weakest component, and Interview Coach runs adaptive interviews
+with pressure follow-ups. Choose AI coaching (Groq/OpenRouter) with automatic
+truthful fallback to a built-in deterministic coach. Test everything hands-free
+with AI-written sample clips the app reads aloud for your mic.
 
 ## 60-second demo script
 1. Open the live URL — point out the Speech Coach label + system status line.

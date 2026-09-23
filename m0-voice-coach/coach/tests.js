@@ -5,7 +5,7 @@ const { AttemptRecorder } = require('../public/attempt-recorder');
 const { computeMetrics } = require('./metrics');
 const { analyzeAttempt } = require('./analyze');
 const { compareAttempts } = require('./compare');
-const { createSession, getSession, addAttempt, makeAttempt } = require('./session');
+const { createSession, getSession, addAttempt, makeAttempt, sessionCount, MAX_SESSIONS } = require('./session');
 const { pickPrompt, PROMPTS } = require('./prompts');
 const { getProviderConfig } = require('./llm/provider');
 const { analyzeWithLLM, buildCoachInput, validateFeedback } = require('./llm-analyze');
@@ -160,6 +160,9 @@ const ok = (name, cond, extra) => {
   ok('s unknown', getSession('nope') === null && addAttempt('nope', {}) === null);
   const stateless = makeAttempt(2, { transcript: 'hi there', durationMs: 1000, turnCount: 1, metrics: { wordCount: 2 }, analysis: { retry_focus: null } });
   ok('s stateless numbering', stateless.n === 2 && stateless.transcript === 'hi there' && !!stateless.id && !!stateless.createdAt, '');
+  const first = createSession(pickPrompt());
+  for (let i = 0; i < MAX_SESSIONS + 5; i++) createSession(pickPrompt());
+  ok('s store capped', sessionCount() === MAX_SESSIONS && getSession(first.id) === null, '');
 }
 
 console.log('RESULT pass=' + pass + ' fail=' + fail);

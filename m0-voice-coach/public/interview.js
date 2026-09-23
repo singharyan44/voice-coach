@@ -150,6 +150,8 @@ answerStartBtn.addEventListener('click', () => {
   if (!interviewRole || interviewRecorder.isRecording() || interviewRecorder.isFinishing() || interviewThinking) return;
   if (!interviewConnected()) { interviewHintEl.textContent = 'Connect first (same connection as Speech).'; return; }
   interviewRecorder.start(Date.now());
+  if (typeof recorder !== 'undefined') recorder.resetToIdle();
+  if (typeof debateRecorder !== 'undefined') debateRecorder.resetToIdle();
   setInterviewState('Recording', true);
   interviewHintEl.textContent = 'Recording your answer — speak now, then “Finish answer”.';
   updateInterviewButtons();

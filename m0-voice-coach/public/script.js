@@ -635,6 +635,10 @@ startAttemptBtn.addEventListener('click', () => {
     return;
   }
   recorder.start(Date.now());
+  // One live recording at a time: starting here abandons any stale round in
+  // the other modes so a single final Turn can't submit twice.
+  if (typeof debateRecorder !== 'undefined') debateRecorder.resetToIdle();
+  if (typeof interviewRecorder !== 'undefined') interviewRecorder.resetToIdle();
   attemptFrames = [captureFrame()].filter(Boolean);
   userBox.textContent = '';
   setAttemptState('Recording', true);

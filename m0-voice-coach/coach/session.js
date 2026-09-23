@@ -7,6 +7,9 @@
 // without touching the API layer or coaching logic.
 
 const sessions = new Map();
+// Bound memory: long-running local servers must not accumulate sessions
+// forever. Serverless instances don't share this map anyway (stateless API).
+const MAX_SESSIONS = 200;
 
 function makeId(prefix) {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -37,6 +40,9 @@ function createSession(prompt) {
     createdAt: new Date().toISOString(),
   };
   sessions.set(session.id, session);
+  while (sessions.size > MAX_SESSIONS) {
+    sessions.delete(sessions.keys().next().value);
+  }
   return session;
 }
 
@@ -52,4 +58,8 @@ function addAttempt(sessionId, { transcript, durationMs, turnCount, metrics, ana
   return attempt;
 }
 
-module.exports = { createSession, getSession, addAttempt, makeAttempt };
+module.exports = { createSession, getSession, addAttempt, makeAttempt, sessionCount, MAX_SESSIONS };
+
+function sessionCount() {
+  return sessions.size;
+}

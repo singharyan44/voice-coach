@@ -29,7 +29,9 @@ if (!API_KEY) {
 }
 
 app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use(express.json());
+// 2 MB: attempt posts can carry up to 3 camera frames (data URLs).
+// Default 100 KB would 413 every camera attempt.
+app.use(express.json({ limit: '2mb' }));
 
 // Streaming token endpoint (Universal-3 Pro Streaming)
 app.get('/token', async (req, res) => {

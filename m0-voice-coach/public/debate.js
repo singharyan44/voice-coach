@@ -161,6 +161,8 @@ roundStartBtn.addEventListener('click', () => {
   if (!debateMotion || debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking) return;
   if (!debateConnected()) { debateHintEl.textContent = 'Connect first (same connection as Speech).'; return; }
   debateRecorder.start(Date.now());
+  if (typeof recorder !== 'undefined') recorder.resetToIdle();
+  if (typeof interviewRecorder !== 'undefined') interviewRecorder.resetToIdle();
   setDebateState('Recording', true);
   debateHintEl.textContent = 'Recording your argument — speak now, then “Finish round”.';
   updateDebateButtons();
