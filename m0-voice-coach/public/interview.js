@@ -22,6 +22,14 @@ const newInterviewBtn = document.getElementById('newInterviewBtn');
 const interviewSampleBtn = document.getElementById('interviewSampleBtn');
 const interviewHintEl = document.getElementById('interviewHint');
 const interviewSampleHintEl = document.getElementById('interviewSampleHint');
+const interviewVoiceBtn = document.getElementById('interviewVoiceBtn');
+let interviewVoiceOn = true;
+
+interviewVoiceBtn.addEventListener('click', () => {
+  interviewVoiceOn = !interviewVoiceOn;
+  interviewVoiceBtn.textContent = interviewVoiceOn ? '🔊 Voice on' : '🔇 Voice off';
+  if (!interviewVoiceOn) { try { speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+});
 const interviewDiagnosisPanel = document.getElementById('interviewDiagnosisPanel');
 const interviewDiagnosisBox = document.getElementById('interviewDiagnosisBox');
 const interviewTabBtn = document.getElementById('interviewTabBtn');
@@ -134,6 +142,7 @@ async function fetchInterviewQuestion(lastAnswer, durationMs, turnCount) {
     interviewExchanges.push({ speaker: 'interviewer', text: data.question });
     appendInterviewMsg('interviewer', data.question,
       (data.intent ? 'intent: ' + data.intent + ' · ' : '') + (data.source === 'llm' ? 'AI Coach' : 'Rules interviewer'));
+    if (interviewVoiceOn) speakText(data.question);
     setInterviewState('Your turn', false);
     interviewHintEl.textContent = 'Your turn — “Speak answer” to respond, or “Diagnose interview” after 2+ answers.';
     log('Interviewer asked (' + data.intent + ')');

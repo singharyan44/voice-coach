@@ -297,6 +297,52 @@ const feedbackBox = document.getElementById('agentTranscript');
 const comparisonPanel = document.getElementById('comparisonPanel');
 const comparisonBox = document.getElementById('comparisonBox');
 const debateCtaBtn = document.getElementById('debateCtaBtn');
+const welcomePanel = document.getElementById('welcomePanel');
+const dismissWelcomeBtn = document.getElementById('dismissWelcomeBtn');
+const copyFeedbackBtn = document.getElementById('copyFeedbackBtn');
+const exportBtn = document.getElementById('exportBtn');
+const ONBOARD_KEY = 'voicecoach.onboarded.v1';
+
+// First-run onboarding: one dismissible panel, never again.
+if (!localStorage.getItem(ONBOARD_KEY)) welcomePanel.hidden = false;
+dismissWelcomeBtn.addEventListener('click', () => {
+  try { localStorage.setItem(ONBOARD_KEY, '1'); } catch (e) { /* ignore */ }
+  welcomePanel.hidden = true;
+});
+
+copyFeedbackBtn.addEventListener('click', async () => {
+  const text = feedbackBox.innerText || '';
+  if (!text.trim()) { attemptHintEl.textContent = 'Nothing to copy yet — finish an attempt first.'; return; }
+  try {
+    await navigator.clipboard.writeText(text);
+    attemptHintEl.textContent = 'Feedback copied to clipboard.';
+  } catch (e) {
+    attemptHintEl.textContent = 'Copy failed: ' + e.message;
+  }
+});
+
+exportBtn.addEventListener('click', async () => {
+  const history = loadHistory();
+  let profile = null;
+  try {
+    const res = await fetch('/api/profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ attempts: history }),
+    });
+    const data = await res.json();
+    if (res.ok) profile = data.profile;
+  } catch (e) { /* export proceeds without profile */ }
+  const text = buildSessionText({ history, profile });
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'voice-coach-session.txt';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  log('Session exported (' + history.length + ' attempts)');
+});
 
 // Cross-mode link: comparison → debate arena (Day 6 integration).
 debateCtaBtn.addEventListener('click', () => {

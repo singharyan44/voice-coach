@@ -17,6 +17,10 @@ const MOTIONS = [
   { id: 'exams', motion: 'Exams are the best way to assess students', context: 'Education assessment.' },
   { id: 'phones-school', motion: 'Phones should be banned in schools', context: 'Classroom policy.' },
   { id: 'veg-diet', motion: 'Everyone should adopt a plant-based diet', context: 'Health and environment.' },
+  { id: 'homework', motion: 'Homework should be abolished', context: 'School policy.' },
+  { id: 'zoos', motion: 'Zoos should be banned', context: 'Animal welfare.' },
+  { id: 'ubi', motion: 'Universal basic income would work', context: 'Economics and policy.' },
+  { id: 'space', motion: 'Space exploration is worth public funding', context: 'Science budgets.' },
 ];
 
 function getMotion(id) {

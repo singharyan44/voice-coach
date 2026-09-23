@@ -18,6 +18,7 @@ const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge,
 const { opponentReply, diagnoseDebate } = require('./debate-llm');
 const { ROLES, getRole, validateQuestion, validateInterviewDiagnosis, stockFollowup, diagnoseInterviewRules } = require('./interview');
 const { interviewerNext, diagnoseInterview } = require('./interview-llm');
+const { buildSessionText } = require('../public/export-text');
 const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
 let pass = 0, fail = 0;
@@ -542,5 +543,23 @@ if (fail) process.exit(1);
   }
 
   console.log('INTERVIEW-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- session export ----------
+  {
+    const emptyDoc = buildSessionText({ history: [], profile: null });
+    ok('export empty', emptyDoc.includes('No attempts recorded'), '');
+    const doc = buildSessionText({
+      history: [{
+        promptTitle: 'P', transcript: 'Hello world test.',
+        metrics: { wordCount: 3, wpm: 90, fillerCount: 0, repeatCount: 0 },
+        analysis: { strengths: ['Steady.'], areas_to_improve: ['More.'], retry_focus: { focus: 'Say more.' } },
+        coachSource: 'llm', createdAt: '2026-01-01T00:00:00.000Z',
+      }],
+      profile: { totalAttempts: 1, strengths: [{ label: 'Steady pace', good: 1, total: 1 }], recurringWeaknesses: [], topFocus: null },
+    });
+    ok('export full', doc.includes('Attempt 1') && doc.includes('Hello world test.') && doc.includes('Steady pace') && doc.includes('AI'), '');
+  }
+
+  console.log('EXPORT-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

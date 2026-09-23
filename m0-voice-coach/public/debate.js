@@ -34,7 +34,15 @@ speechDrillBtn.addEventListener('click', () => {
 });
 const debateSampleBtn = document.getElementById('debateSampleBtn');
 const debateSampleHintEl = document.getElementById('debateSampleHint');
+const debateVoiceBtn = document.getElementById('debateVoiceBtn');
 let debateSampleStreaming = false;
+let debateVoiceOn = true;
+
+debateVoiceBtn.addEventListener('click', () => {
+  debateVoiceOn = !debateVoiceOn;
+  debateVoiceBtn.textContent = debateVoiceOn ? '🔊 Voice on' : '🔇 Voice off';
+  if (!debateVoiceOn) { try { speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+});
 const speechTabBtn = document.getElementById('speechTabBtn');
 const debateTabBtn = document.getElementById('debateTabBtn');
 
@@ -243,6 +251,7 @@ async function submitDebateRound({ transcript, turnCount, durationMs }) {
     const meta = (data.weakestComponent ? 'attacked: ' + data.weakestComponent + ' · ' : '') +
       (data.source === 'llm' ? 'AI Coach' : (data.fallback ? 'Rules sparring — AI fallback' : 'Rules sparring'));
     appendThreadMsg('opponent', data.attack, meta);
+    if (debateVoiceOn) speakText(data.attack);
     setDebateState('Your turn', false);
     debateHintEl.textContent = 'Your turn — “Speak argument” to respond, or “Diagnose debate” after 2+ rounds.';
     log('Opponent replied (weakest: ' + (data.weakestComponent || 'n/a') + ')');

@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f172a" />
+  <link rel="manifest" href="manifest.json" />
   <title>Voice Coach — Speech Coach</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -11,6 +13,14 @@
     <h1>Voice Coach <span class="mode-label">Speech Coach</span></h1>
     <p class="subtitle">Practice → Speak → Feedback → Retry → Improve</p>
     <p class="journey">Speak → Feedback → Retry → Targeted exercise → Debate → Profile</p>
+
+    <section class="panel" id="welcomePanel" hidden>
+      <h2>New here? 60-second start</h2>
+      <div class="hint">1. Press <strong>Connect</strong> → 2. <strong>Start attempt</strong> → 3. speak → 4. <strong>Finish</strong>. No mic handy? Press a sample button instead — same pipeline.</div>
+      <div class="row">
+        <button id="dismissWelcomeBtn" class="btn btn-small">Got it</button>
+      </div>
+    </section>
 
     <div class="status-bar" id="status">Disconnected</div>
     <div id="healthLine" class="hint">Checking system…</div>
@@ -79,6 +89,9 @@
       </section>
       <section class="panel">
         <h2>Coaching feedback</h2>
+        <div class="row">
+          <button id="copyFeedbackBtn" class="btn btn-small">Copy feedback</button>
+        </div>
         <div id="agentTranscript" class="transcript-box"></div>
       </section>
     </div>
@@ -98,6 +111,9 @@
 
     <section class="panel">
       <h2>History</h2>
+      <div class="row">
+        <button id="exportBtn" class="btn btn-small">Export session (.txt)</button>
+      </div>
       <div id="historyBox" class="hint">No attempts yet — your practice history will appear here and survive reloads.</div>
     </section>
     </div><!-- /speechMode -->
@@ -128,6 +144,7 @@
           <button id="roundFinishBtn" class="btn btn-small" disabled>Finish round</button>
           <button id="diagnoseBtn" class="btn btn-small" disabled>Diagnose debate</button>
           <button id="rematchBtn" class="btn btn-small">Rematch (swap sides)</button>
+          <button id="debateVoiceBtn" class="btn btn-small">🔊 Voice on</button>
         </div>
         <div class="row">
           <button id="debateSampleBtn" class="btn btn-small">▶ Sample argument (my side)</button>
@@ -166,6 +183,7 @@
           <button id="answerFinishBtn" class="btn btn-small" disabled>Finish answer</button>
           <button id="diagnoseInterviewBtn" class="btn btn-small" disabled>Diagnose interview</button>
           <button id="newInterviewBtn" class="btn btn-small">New interview</button>
+          <button id="interviewVoiceBtn" class="btn btn-small">🔊 Voice on</button>
         </div>
         <div class="row">
           <button id="interviewSampleBtn" class="btn btn-small">▶ Sample answer</button>
@@ -184,6 +202,7 @@
   </div>
 
   <script src="attempt-recorder.js"></script>
+  <script src="export-text.js"></script>
   <script src="script.js"></script>
   <script src="debate.js"></script>
   <script src="interview.js"></script>

@@ -43,6 +43,30 @@ const ROLES = [
     focus: ['teamwork', 'failure', 'pressure', 'strengths'],
     opener: 'Tell me about a time you failed at something. What did you learn?',
   },
+  {
+    id: 'design',
+    title: 'UX Designer',
+    focus: ['design decisions', 'user research', 'feedback', 'constraints'],
+    opener: 'Walk me through a design you shipped that you are proud of. Why those choices?',
+  },
+  {
+    id: 'sales',
+    title: 'Sales Representative',
+    focus: ['objections', 'targets', 'relationships', 'rejection'],
+    opener: 'Tell me about the toughest objection you ever overcame to close a deal.',
+  },
+  {
+    id: 'teacher',
+    title: 'Teacher',
+    focus: ['difficult students', 'engagement', 'outcomes', 'parents'],
+    opener: 'Describe a student who was struggling and what you did about it.',
+  },
+  {
+    id: 'consultant',
+    title: 'Consultant',
+    focus: ['ambiguous problems', 'clients', 'recommendations', 'impact'],
+    opener: 'Tell me about a time you walked into an ambiguous problem with no clear answer.',
+  },
 ];
 
 function getRole(id) {
