@@ -11,6 +11,7 @@
 //   speech-clean   — clean practice answer (~3 sentences)
 //   debate-for     — argument FOR the motion (~4 sentences, one vague claim)
 //   debate-against — argument AGAINST the motion (~4 sentences)
+//   interview-answer — STAR-style interview answer (~3 sentences)
 
 const { getProviderConfig } = require('./llm/provider');
 const openrouter = require('./llm/openrouter');
@@ -27,6 +28,8 @@ const STATIC_SAMPLES = {
     'Artificial intelligence is good for education because it personalizes learning for every single student. Studies show students improve a lot when lessons adapt to them. Every school should use it as soon as possible.',
   'debate-against':
     'Artificial intelligence harms education because students stop thinking for themselves. Real learning comes from struggling through hard problems. Depending on machines will only make young minds lazy.',
+  'interview-answer':
+    'In my last project the release was slipping because testing kept finding late bugs. I proposed freezing features two days early so QA had a clean window. We shipped on time, and the team kept the practice afterwards.',
 };
 
 const SYSTEM_PROMPT = `You write short spoken practice samples for a voice-coaching app. The text will be read aloud by text-to-speech and transcribed, so write naturally speakable words only: no stage directions, no markdown, no quotes around the whole thing, no lists.
@@ -36,6 +39,7 @@ Rules by kind (given in the request):
 - speech-clean: 3-4 clear sentences on the topic, zero fillers, complete sentences. 35-65 words.
 - debate-for: 3-4 sentence argument FOR the motion, spoken style, including exactly one vague evidence claim (e.g. "studies show") for the opponent to attack. 40-70 words.
 - debate-against: 3-4 sentence argument AGAINST the motion, spoken style, with one concrete example. 40-70 words.
+- interview-answer: 3-sentence job interview answer following situation, action, result. Concrete and specific. 35-65 words.
 
 Respond with JSON ONLY, no markdown fences: { "text": "..." }`;
 

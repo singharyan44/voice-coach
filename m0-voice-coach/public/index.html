@@ -20,6 +20,7 @@
     <div class="row">
       <button id="speechTabBtn" class="btn btn-small">Speech Coach</button>
       <button id="debateTabBtn" class="btn btn-small">Debate Coach</button>
+      <button id="interviewTabBtn" class="btn btn-small">Interview Coach</button>
     </div>
 
     <div id="speechMode">
@@ -144,11 +145,47 @@
       </section>
     </div><!-- /debateMode -->
 
+    <div id="interviewMode" hidden>
+      <section class="panel">
+        <h2>Interview setup</h2>
+        <div class="row">
+          <select id="roleSelect"></select>
+        </div>
+        <div id="roleFocus" class="hint"></div>
+        <div class="row">
+          <button id="interviewStartBtn" class="btn btn-small">Start interview</button>
+        </div>
+        <div id="interviewSetupHint" class="hint">Same coach engine as Speech (AI/Rules above). The interviewer writes; you answer out loud.</div>
+      </section>
+
+      <section class="panel" id="interviewArenaPanel" hidden>
+        <h2>Interview <span id="interviewState" class="state-pill">Ready</span></h2>
+        <div id="interviewThread"></div>
+        <div class="row">
+          <button id="answerStartBtn" class="btn btn-small">Speak answer</button>
+          <button id="answerFinishBtn" class="btn btn-small" disabled>Finish answer</button>
+          <button id="diagnoseInterviewBtn" class="btn btn-small" disabled>Diagnose interview</button>
+          <button id="newInterviewBtn" class="btn btn-small">New interview</button>
+        </div>
+        <div class="row">
+          <button id="interviewSampleBtn" class="btn btn-small">▶ Sample answer</button>
+        </div>
+        <div id="interviewHint" class="hint"></div>
+        <div id="interviewSampleHint" class="hint">No mic needed: the app writes a fresh answer and reads it aloud — your live mic captures it.</div>
+      </section>
+
+      <section class="panel" id="interviewDiagnosisPanel" hidden>
+        <h2>Interview diagnosis</h2>
+        <div id="interviewDiagnosisBox"></div>
+      </section>
+    </div><!-- /interviewMode -->
+
     <div id="log" class="log"></div>
   </div>
 
   <script src="attempt-recorder.js"></script>
   <script src="script.js"></script>
   <script src="debate.js"></script>
+  <script src="interview.js"></script>
 </body>
 </html>

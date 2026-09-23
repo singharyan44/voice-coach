@@ -110,3 +110,15 @@ opponent spars with rotating stock challenges (clearly labeled).
 - `GET /api/debate/motions`
 - `POST /api/debate/opponent` → `{ attack, weakestComponent, argument, source, metrics }`
 - `POST /api/debate/diagnose` → `{ diagnosis, source }`
+
+## Interview Coach (adaptive interviewer, same engine)
+
+Pick a role (6 built-in), answer the opener and adaptive follow-ups
+(clarification → probe → pressure) out loud, then diagnose: scorecard
+(answered / concise / evidenced / pressure handled) plus retry focus, with
+optional cross-interview delivery comparison. Rules fallback asks
+role-grounded stock questions, clearly labeled.
+
+- `GET /api/interview/roles`
+- `POST /api/interview/question` → `{ question, intent, source, metrics }`
+- `POST /api/interview/diagnose` → `{ diagnosis, source, comparison? }`

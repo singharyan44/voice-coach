@@ -16,6 +16,8 @@ const { generateSampleText, staticSample } = require('./sample-text');
 const { assignNext } = require('./assign');
 const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge, diagnoseRules } = require('./debate');
 const { opponentReply, diagnoseDebate } = require('./debate-llm');
+const { ROLES, getRole, validateQuestion, validateInterviewDiagnosis, stockFollowup, diagnoseInterviewRules } = require('./interview');
+const { interviewerNext, diagnoseInterview } = require('./interview-llm');
 const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
 let pass = 0, fail = 0;
@@ -484,5 +486,58 @@ if (fail) process.exit(1);
   }
 
   console.log('VISION-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- interview coach ----------
+  {
+    ok('interview roles', ROLES.length >= 6 && ROLES.every((r) => r.id && r.title && r.opener && Array.isArray(r.focus)), '');
+    ok('interview getRole', getRole('swe').title.includes('Software') && getRole('nope') === null, '');
+    const q = validateQuestion({ question: 'What did you personally ship last quarter?', intent: 'probe' });
+    ok('interview question valid', q.intent === 'probe', '');
+    for (const [name, bad] of [
+      ['short', { question: 'Why?', intent: 'probe' }],
+      ['bad intent', { question: 'Tell me about a time you led something difficult.', intent: 'vibes' }],
+      ['missing', { intent: 'probe' }],
+    ]) {
+      let threw = false;
+      try { validateQuestion(bad); } catch (e) { threw = true; }
+      ok('interview question invalid: ' + name, threw);
+    }
+    const dg = validateInterviewDiagnosis({ strengths: ['Answered directly.'], areas_to_improve: ['Thin evidence.'], actionable_feedback: ['Add numbers.'], retry_focus: { focus: 'Evidence.', targets: ['evidence'], tip: 'One number per answer.' }, scorecard: { questions_answered: 2, concise_answers: 1, evidence_given: 1, pressure_handled: 0 } });
+    ok('interview diagnosis valid', dg.scorecard.questions_answered === 2, '');
+    let threwDg = false;
+    try { validateInterviewDiagnosis({ strengths: ['S.'], areas_to_improve: [], actionable_feedback: ['F.'], retry_focus: { focus: 'R.', targets: [], tip: '' } }); } catch (e) { threwDg = true; }
+    ok('interview diagnosis invalid empty', threwDg);
+    ok('interview stock rotates', stockFollowup(0) !== stockFollowup(1), '');
+    const dr = diagnoseInterviewRules({ answers: ['I did X.', 'Then Y.'], metricsList: [{ wordCount: 15, fillerCount: 0 }, { wordCount: 20, fillerCount: 1 }] });
+    ok('interview rules diagnosis', dr.scorecard.questions_answered === 2 && dr.strengths.length > 0, '');
+    const mockQ = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ question: 'What was the hardest part, specifically?', intent: 'clarification' }) } }] }),
+    });
+    const qOut = await interviewerNext(
+      { role: getRole('swe'), lastAnswer: 'I fixed a bug.', history: [], round: 1 },
+      { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: mockQ, timeoutMs: 2000 }
+    );
+    ok('interview mocked question', qOut.intent === 'clarification' && qOut.provider === 'groq', '');
+    const mockDg = async () => ({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify({ strengths: ['Direct.'], areas_to_improve: ['Short.'], actionable_feedback: ['Say more.'], retry_focus: { focus: 'Evidence.', targets: ['evidence'], tip: 'Numbers.' }, scorecard: { questions_answered: 2, concise_answers: 2, evidence_given: 0, pressure_handled: 0 } }) } }] }),
+    });
+    const dgOut = await diagnoseInterview(
+      { role: getRole('swe'), exchanges: [{ speaker: 'candidate', text: 'I did X.' }], delivery: [] },
+      { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: mockDg, timeoutMs: 2000 }
+    );
+    ok('interview mocked diagnosis', dgOut.scorecard.concise_answers === 2, '');
+    let threwQ = false;
+    try {
+      await interviewerNext(
+        { role: getRole('swe'), lastAnswer: null, history: [], round: 0 },
+        { env: { COACH_PROVIDER: 'groq', GROQ_API_KEY: 'k' }, fetchImpl: async () => { throw new Error('down'); }, timeoutMs: 2000 }
+      );
+    } catch (e) { threwQ = true; }
+    ok('interview question failure throws', threwQ);
+  }
+
+  console.log('INTERVIEW-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

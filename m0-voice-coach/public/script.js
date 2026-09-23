@@ -121,7 +121,8 @@ function handleMessage(data) {
       if (done) {
         submitFinishedAttempt(done);
       }
-      if (typeof debateOnFinal === 'function') debateOnFinal(transcript, order); else if (recorder.isIdle() && attemptCount === 0 && transcript) {
+      if (typeof debateOnFinal === 'function') debateOnFinal(transcript, order);
+      if (typeof interviewOnFinal === 'function') interviewOnFinal(transcript, order); else if (recorder.isIdle() && attemptCount === 0 && transcript) {
         // Heard speech outside any attempt: teach the ordering now, while the
         // transcript is on screen — otherwise Finish later finds nothing.
         const heard = transcript.length > 60 ? transcript.slice(0, 60) + '…' : transcript;
@@ -130,6 +131,7 @@ function handleMessage(data) {
     } else {
       recorder.onTurn({ text: transcript, final: false, order });
       if (typeof debateOnPartial === 'function') debateOnPartial(transcript, order);
+      if (typeof interviewOnPartial === 'function') interviewOnPartial(transcript, order);
       userBox.textContent = transcript;
     }
   } else if (type === 'Termination') {

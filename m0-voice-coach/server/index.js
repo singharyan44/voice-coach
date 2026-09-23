@@ -15,6 +15,8 @@ const { assignNext } = require('../coach/assign');
 const { generateSampleText, staticSample } = require('../coach/sample-text');
 const { MOTIONS, getMotion, stockChallenge, diagnoseRules } = require('../coach/debate');
 const { opponentReply, diagnoseDebate } = require('../coach/debate-llm');
+const { ROLES, getRole, stockFollowup, diagnoseInterviewRules } = require('../coach/interview');
+const { interviewerNext, diagnoseInterview } = require('../coach/interview-llm');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -325,3 +327,107 @@ app.post('/api/debate/diagnose', async (req, res) => {
     });
   }
 });
+
+// ---------------- Interview Coach (stateless; same TrainingEngine loop) ----------------
+
+app.get('/api/interview/roles', (req, res) => {
+  res.json({ roles: ROLES });
+});
+
+function interviewEngine(req) {
+  return req.body && req.body.coachEngine === 'rules' ? 'rules' : 'ai';
+}
+
+// Next interviewer question: opener when no answer yet, else adaptive
+// follow-up grounded in the candidate's last answer.
+app.post('/api/interview/question', async (req, res) => {
+  const body = req.body || {};
+  const role = getRole(body.roleId);
+  if (!role) return res.status(400).json({ error: 'Unknown role. Pick one from /api/interview/roles.' });
+  const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
+  const round = history.filter((h) => h.speaker === 'candidate').length;
+  const lastAnswer = typeof body.lastAnswer === 'string' && body.lastAnswer.trim() ? body.lastAnswer.trim() : null;
+  // Delivery metrics for the just-finished answer (powers diagnosis + history).
+  const ansMs = Number(body.durationMs);
+  const ansTurns = Number(body.turnCount);
+  const answerMetrics = lastAnswer ? computeMetrics({
+    transcript: lastAnswer,
+    durationMs: Number.isFinite(ansMs) && ansMs >= 0 ? ansMs : 0,
+    turnCount: Number.isFinite(ansTurns) && ansTurns > 0 ? Math.floor(ansTurns) : 1,
+  }) : null;
+
+  if (interviewEngine(req) === 'rules') {
+    return res.json({
+      question: lastAnswer ? stockFollowup(round) : role.opener,
+      intent: lastAnswer ? 'probe' : 'opener',
+      source: 'rules',
+      metrics: answerMetrics,
+    });
+  }
+  try {
+    const out = await interviewerNext({ role, lastAnswer, history, round });
+    res.json({ question: out.question, intent: out.intent, source: 'llm', metrics: answerMetrics });
+  } catch (err) {
+    console.error('Interviewer unavailable, using stock question:', err.message);
+    res.json({
+      question: lastAnswer ? stockFollowup(round) : role.opener,
+      intent: lastAnswer ? 'probe' : 'opener',
+      source: 'rules',
+      fallback: true,
+      metrics: answerMetrics,
+    });
+  }
+});
+
+// Diagnose a completed interview. Accepts `previous` (last interview) for a
+// deterministic delivery comparison, same as speech retries.
+app.post('/api/interview/diagnose', async (req, res) => {
+  const body = req.body || {};
+  const role = getRole(body.roleId);
+  if (!role) return res.status(400).json({ error: 'Unknown role.' });
+  const exchanges = Array.isArray(body.exchanges) ? body.exchanges.slice(-20) : [];
+  const answers = exchanges.filter((e) => e.speaker === 'candidate' && e.text && e.text.trim());
+  if (answers.length === 0) return res.status(400).json({ error: 'No answers to diagnose yet.' });
+  const delivery = Array.isArray(body.delivery) ? body.delivery.slice(-10) : [];
+
+  let diagnosis;
+  let source;
+  if (interviewEngine(req) === 'rules') {
+    diagnosis = diagnoseInterviewRules({ answers: answers.map((a) => a.text), metricsList: delivery });
+    source = 'rules';
+  } else {
+    try {
+      diagnosis = await diagnoseInterview({ role, exchanges, delivery });
+      source = 'llm';
+    } catch (err) {
+      console.error('Interview diagnosis unavailable, using deterministic fallback:', err.message);
+      diagnosis = diagnoseInterviewRules({ answers: answers.map((a) => a.text), metricsList: delivery });
+      source = 'rules';
+    }
+  }
+
+  let comparison = null;
+  const bp = body.previous;
+  if (bp && bp.metrics && bp.analysis && bp.analysis.retry_focus) {
+    comparison = compareAttempts({ ...bp.analysis, metrics: bp.metrics }, { ...diagnosis, metrics: deliverySummary(delivery) }, bp.analysis.retry_focus);
+  }
+  res.json({ diagnosis, source, comparison });
+});
+
+function deliverySummary(delivery) {
+  const words = delivery.reduce((a, m) => a + (m.wordCount || 0), 0);
+  const fillers = delivery.reduce((a, m) => a + (m.fillerCount || 0), 0);
+  const repeats = delivery.reduce((a, m) => a + (m.repeatCount || 0), 0);
+  return {
+    wordCount: words,
+    fillerCount: fillers,
+    fillerRatePer100: words > 0 ? Math.round((fillers / words) * 1000) / 10 : 0,
+    repeatCount: repeats,
+    sentenceCount: 0,
+    fragmentCount: 0,
+    longSentenceCount: 0,
+    wpm: null,
+    durationSec: 0,
+    turnCount: delivery.length,
+  };
+}
