@@ -68,6 +68,13 @@ function updateDebateButtons() {
   const connected = debateConnected();
   const busy = debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking;
   const live = debateExchanges.length > 0;
+  const voice = typeof voiceModeActive === 'function' && voiceModeActive();
+  const endVoiceBtn = document.getElementById('endVoiceBtn');
+  roundStartBtn.hidden = voice;
+  roundFinishBtn.hidden = voice;
+  debateSampleBtn.hidden = voice;
+  diagnoseBtn.hidden = voice;
+  if (endVoiceBtn) endVoiceBtn.hidden = !voice;
   roundStartBtn.disabled = busy || !connected;
   roundFinishBtn.disabled = !debateRecorder.isRecording() || !connected;
   const userTurns = debateExchanges.filter((e) => e.speaker === 'user').length;
@@ -150,6 +157,7 @@ function debateSideValue() {
 debateStartBtn.addEventListener('click', () => {
   const id = motionSelect.value;
   if (!id) { debateSetupHint.textContent = 'Pick a motion first.'; return; }
+  if (typeof closeVoiceSession === 'function') closeVoiceSession();
   debateMotion = { id, motion: motionSelect.options[motionSelect.selectedIndex].text };
   debateSide = debateSideValue();
   debateExchanges = [];
@@ -159,6 +167,10 @@ debateStartBtn.addEventListener('click', () => {
   debateDiagnosisPanel.hidden = true;
   speechDrillBtn.hidden = true;
   debateArenaPanel.hidden = false;
+  if (typeof voiceOpponentMode === 'function' && voiceOpponentMode() === 'voice') {
+    if (typeof startVoiceDebate === 'function') startVoiceDebate(id, debateSide);
+    return;
+  }
   setDebateState('Ready', false);
   debateHintEl.textContent = 'You argue ' + debateSide.toUpperCase() + ': "' + debateMotion.motion + '". Press “Speak argument”, make your case, then “Finish round”.';
   log('Debate started: ' + debateMotion.motion + ' (' + debateSide + ')');
@@ -321,6 +333,7 @@ function renderDebateDiagnosis(d, source) {
 
 rematchBtn.addEventListener('click', () => {
   if (!debateMotion || debateRecorder.isRecording() || debateRecorder.isFinishing() || debateThinking) return;
+  if (typeof closeVoiceSession === 'function') closeVoiceSession();
   debateSide = debateSide === 'for' ? 'against' : 'for';
   document.querySelector('input[name="debateSide"][value="' + debateSide + '"]').checked = true;
   debateExchanges = [];

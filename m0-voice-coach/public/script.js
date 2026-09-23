@@ -258,6 +258,7 @@ function createInlineWorklet() {
 }
 
 function endSession() {
+  if (typeof closeVoiceSession === 'function') closeVoiceSession();
   if (ws && ws.readyState === WebSocket.OPEN) {
     // Send Terminate to finalize the current turn
     ws.send(JSON.stringify({ type: 'Terminate' }));
@@ -277,6 +278,7 @@ function cleanupAudio() {
 }
 
 window.addEventListener('pagehide', () => {
+  if (typeof closeVoiceSession === 'function') closeVoiceSession();
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'Terminate' }));
   }
@@ -477,7 +479,7 @@ function renderHistory(history) {
     const focus = a.analysis && a.analysis.retry_focus ? a.analysis.retry_focus.focus : '';
     return '<li><strong>' + escapeHtml(a.promptTitle || 'Practice') + '</strong> <span class="hint">' + escapeHtml(when) + '</span><br>' +
       '<span class="hint">' + (m.wordCount || 0) + ' words · ' + pace + ' · ' + (m.fillerCount || 0) + ' fillers · ' +
-      escapeHtml(a.coachSource === 'llm' ? 'AI Coach' : 'Rules Coach') + '</span>' +
+      escapeHtml(a.coachSource === 'llm' ? 'AI Coach' : a.coachSource === 'voice' ? 'Voice debate' : 'Rules Coach') + '</span>' +
       (focus ? '<br>Focus was: ' + escapeHtml(focus) : '') + '</li>';
   }).join('') + '</ul></div>';
 }

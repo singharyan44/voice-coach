@@ -120,7 +120,20 @@ opponent spars with rotating stock challenges (clearly labeled).
 
 - `GET /api/debate/motions`
 - `POST /api/debate/opponent` → `{ attack, weakestComponent, argument, source, metrics }`
-- `POST /api/debate/diagnose` → `{ diagnosis, source }`
+- `POST /api/debate/diagnose` → `{ diagnosis, source, delivery? }`
+  (`answers` accepted instead of precomputed `delivery`; per-answer metrics
+  are computed server-side and returned for history)
+
+## Voice debate opponent (spoken, Voice Agent API)
+
+The Debate arena offers a **Voice** opponent alongside Text: a live
+AssemblyAI voice session configured with the debate persona argues out loud
+(mic → voice agent → spoken replies, interruption works both ways).
+Transcripts feed the same diagnose endpoint — measurement stays on the
+analysis side, conversation on the voice side.
+
+- `GET /api/voice-token` (server-side key, single-use token)
+- `POST /api/debate/voice-config` → `{ system_prompt, greeting }`
 
 ## Interview Coach (adaptive interviewer, same engine)
 

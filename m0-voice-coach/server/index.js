@@ -17,6 +17,7 @@ const { MOTIONS, getMotion, stockChallenge, diagnoseRules } = require('../coach/
 const { opponentReply, diagnoseDebate } = require('../coach/debate-llm');
 const { ROLES, getRole, stockFollowup, diagnoseInterviewRules } = require('../coach/interview');
 const { interviewerNext, diagnoseInterview } = require('../coach/interview-llm');
+const { buildVoiceOpponentPrompt } = require('../coach/voice-opponent');
 const { compareAttempts } = require('../coach/compare');
 
 const app = express();
@@ -56,6 +57,44 @@ app.get('/token', async (req, res) => {
     console.error('Token fetch error:', err.message);
     res.status(500).json({ error: 'Failed to fetch token', message: err.message });
   }
+});
+
+// Voice-agent token endpoint (spoken debate opponent). Separate from the
+// streaming token above: different API, different auth (Bearer), single-use.
+app.get('/api/voice-token', async (req, res) => {
+  try {
+    const url = new URL('https://agents.assemblyai.com/v1/token');
+    url.searchParams.set('expires_in_seconds', '300');
+    url.searchParams.set('max_session_duration_seconds', '3600');
+
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${API_KEY}` },
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Voice token endpoint error:', response.status, text);
+      return res.status(response.status).send(text);
+    }
+
+    const data = await response.json();
+    res.json({ token: data.token });
+  } catch (err) {
+    console.error('Voice token fetch error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch voice token', message: err.message });
+  }
+});
+
+// Inline session config for the spoken opponent (persona only — audio and
+// measurement stay client-side / Realtime-side).
+app.post('/api/debate/voice-config', (req, res) => {
+  const body = req.body || {};
+  const motion = getMotion(body.motionId);
+  if (!motion) return res.status(400).json({ error: 'Unknown motion.' });
+  if (body.userSide !== 'for' && body.userSide !== 'against') {
+    return res.status(400).json({ error: 'userSide must be "for" or "against".' });
+  }
+  res.json(buildVoiceOpponentPrompt(motion, body.userSide));
 });
 
 // Local runs (`npm start`) listen here. Serverless hosts (Vercel
@@ -223,6 +262,8 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
   res.json({ attempt, analysis, coachSource, requestedEngine: routed.requested, comparison });
 });
 
+// ---------------- Debate Coach (stateless; same TrainingEngine loop) ----------------
+
 // Compare the last two attempts of a session.
 app.get('/api/sessions/:id/comparison', (req, res) => {
   const session = getSession(req.params.id);
@@ -311,22 +352,36 @@ app.post('/api/debate/diagnose', async (req, res) => {
     return res.status(400).json({ error: 'userSide must be "for" or "against".' });
   }
   const exchanges = Array.isArray(body.exchanges) ? body.exchanges.slice(-20) : [];
-  const userTurns = exchanges.filter((e) => e.speaker === 'user' && e.text && e.text.trim());
-  if (userTurns.length === 0) return res.status(400).json({ error: 'No user arguments to diagnose yet.' });
-  const delivery = Array.isArray(body.delivery) ? body.delivery.slice(-10) : [];
+  const answers = exchanges.filter((e) => e.speaker === 'user' && e.text && e.text.trim());
+  if (answers.length === 0) return res.status(400).json({ error: 'No user arguments to diagnose yet.' });
+  // Delivery metrics: precomputed per-turn objects, or computed here from
+  // voice-mode answers ({transcript, durationMs}) — no word timings there,
+  // so pause verdicts stay silent, everything else is measured.
+  let delivery = Array.isArray(body.delivery) ? body.delivery.slice(-10) : [];
+  if (delivery.length === 0 && Array.isArray(body.answers)) {
+    delivery = body.answers.slice(-10).map((a) => {
+      const ms = Number(a.durationMs);
+      return computeMetrics({
+        transcript: String(a.transcript || ''),
+        durationMs: Number.isFinite(ms) && ms >= 0 ? ms : 0,
+        turnCount: 1,
+      });
+    }).filter((m) => m.wordCount > 0);
+  }
 
   if (debateEngine(req) === 'rules') {
-    return res.json({ diagnosis: diagnoseRules({ userTurns: userTurns.map((t) => t.text), metricsList: delivery }), source: 'rules' });
+    return res.json({ diagnosis: diagnoseRules({ userTurns: answers.map((t) => t.text), metricsList: delivery }), source: 'rules', delivery });
   }
   try {
     const out = await diagnoseDebate({ motion, userSide: body.userSide, exchanges, delivery });
-    res.json({ diagnosis: out, source: 'llm' });
+    res.json({ diagnosis: out, source: 'llm', delivery });
   } catch (err) {
     console.error('Debate diagnosis unavailable, using deterministic fallback:', err.message);
     res.json({
-      diagnosis: diagnoseRules({ userTurns: userTurns.map((t) => t.text), metricsList: delivery }),
+      diagnosis: diagnoseRules({ userTurns: answers.map((t) => t.text), metricsList: delivery }),
       source: 'rules',
       fallback: true,
+      delivery,
     });
   }
 });

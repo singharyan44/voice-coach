@@ -130,6 +130,11 @@
           <label class="engine-option"><input type="radio" name="debateSide" value="for" checked> For</label>
           <label class="engine-option"><input type="radio" name="debateSide" value="against"> Against</label>
         </div>
+        <div class="row engine-row">
+          <span class="engine-label">Opponent</span>
+          <label class="engine-option"><input type="radio" name="opponentMode" value="text" checked> Text</label>
+          <label class="engine-option"><input type="radio" name="opponentMode" value="voice"> Voice</label>
+        </div>
         <div class="row">
           <button id="debateStartBtn" class="btn btn-small">Start debate</button>
         </div>
@@ -144,6 +149,7 @@
           <button id="roundFinishBtn" class="btn btn-small" disabled>Finish round</button>
           <button id="diagnoseBtn" class="btn btn-small" disabled>Diagnose debate</button>
           <button id="rematchBtn" class="btn btn-small">Rematch (swap sides)</button>
+          <button id="endVoiceBtn" class="btn btn-small" hidden>End &amp; Diagnose</button>
           <button id="debateVoiceBtn" class="btn btn-small">🔊 Voice on</button>
         </div>
         <div class="row">
@@ -205,6 +211,7 @@
   <script src="export-text.js"></script>
   <script src="script.js"></script>
   <script src="debate.js"></script>
+  <script src="voice-debate.js"></script>
   <script src="interview.js"></script>
 </body>
 </html>

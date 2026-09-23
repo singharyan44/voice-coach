@@ -18,6 +18,7 @@ const { MOTIONS, getMotion, validateOpponent, validateDiagnosis, stockChallenge,
 const { opponentReply, diagnoseDebate } = require('./debate-llm');
 const { ROLES, getRole, validateQuestion, validateInterviewDiagnosis, stockFollowup, diagnoseInterviewRules } = require('./interview');
 const { interviewerNext, diagnoseInterview } = require('./interview-llm');
+const { buildVoiceOpponentPrompt } = require('./voice-opponent');
 const { buildSessionText } = require('../public/export-text');
 const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
@@ -600,5 +601,18 @@ if (fail) process.exit(1);
   }
 
   console.log('PAUSE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- voice opponent persona ----------
+  {
+    const cfg = buildVoiceOpponentPrompt({ motion: 'AI is good for education', context: 'Schools.' }, 'for');
+    ok('voice persona sides', cfg.system_prompt.includes('AGAINST') && cfg.greeting.includes('for'), '');
+    ok('voice persona motion', cfg.system_prompt.includes('AI is good for education'), '');
+    ok('voice persona rules', /weakest component/i.test(cfg.system_prompt) && /Never comment on voice, accent/i.test(cfg.system_prompt), '');
+    ok('voice persona concise', /1–3 short spoken sentences/.test(cfg.system_prompt), '');
+    const cfgA = buildVoiceOpponentPrompt({ motion: 'M', context: 'C' }, 'against');
+    ok('voice persona flipped', cfgA.system_prompt.includes('argue FOR') && cfgA.greeting.includes('against'), '');
+  }
+
+  console.log('VOICE-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });
