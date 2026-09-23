@@ -33,6 +33,19 @@ Node.js + Express, AssemblyAI Universal-3.5 Pro Streaming (16 kHz PCM16),
 Groq/OpenRouter LLMs, vanilla JS frontend, Vercel + GitHub.
 
 ## Known MVP limitations (honest)
-- Attempt history lives in the page session (refresh clears it).
+- History/profile live in the browser (per-device, no accounts yet).
 - AI coaching needs provider keys; otherwise the deterministic coach serves.
 - Best on desktop Chrome/Edge; mobile works but is less polished.
+
+## Market + business (for the judges)
+- **Problem:** 75%+ of people fear public speaking; existing tools give
+  generic tips ("be confident") with no practice loop and no measurement.
+  Hiring pipelines lose strong candidates to weak interview delivery.
+- **Who pays:** individual learners (freemium), career coaches & bootcamps
+  (seat licenses), HR/talent teams (interview-prep screening at scale).
+- **Model:** free practice + history; paid tiers for AI coaching depth,
+  unlimited modes, team dashboards, API access.
+- **Moat:** not the feedback — the adaptive loop (diagnose → targeted drill
+  → measured retry) plus the personal profile that compounds per user.
+- **Future:** more scenarios (negotiation, teaching, leadership), video-aware
+  coaching (spiked), team/coach dashboards, mobile app.

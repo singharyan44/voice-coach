@@ -95,6 +95,19 @@ function analyzeAttempt({ metrics }) {
     observations.push({ type: 'measured', text: `${m.hesitationCount} hesitation marker${m.hesitationCount === 1 ? '' : 's'} ("--" / "...") in the transcript.` });
   }
 
+  // ---- Pauses (measured from AssemblyAI word timings, not guessed) ----
+  if (m.wordCount > 0 && m.pausesMeasured) {
+    if ((m.pauseCount || 0) === 0) {
+      push(strengths, 'No hesitation pauses — steady flow from start to finish (measured from word timings).');
+    } else if (m.pauseCount >= 3) {
+      const longest = m.longestPauseMs >= 1000 ? `, longest ${(m.longestPauseMs / 1000).toFixed(1)}s` : '';
+      push(areas, `${m.pauseCount} hesitation pauses over 0.7s${longest} — the delivery stalls mid-thought.`);
+      push(actions, 'When you feel a stall coming, land the sentence you are on instead of holding silence, then start fresh.');
+    } else {
+      observations.push({ type: 'measured', text: `${m.pauseCount} brief hesitation pause${m.pauseCount === 1 ? '' : 's'} — within a normal range.` });
+    }
+  }
+
   // ---- Retry focus: single priority, highest-signal issue first ----
   let retryFocus;
   if (m.wordCount < 8) {
@@ -120,6 +133,12 @@ function analyzeAttempt({ metrics }) {
       focus: 'Zero repeated words — push forward through stumbles.',
       targets: ['repeatCount'],
       tip: 'Never go back to re-say a word; keep moving to the next one.',
+    };
+  } else if (m.pausesMeasured && (m.pauseCount || 0) >= 3) {
+    retryFocus = {
+      focus: `Fewer mid-thought stalls (currently ${m.pauseCount} hesitation pauses).`,
+      targets: ['pauses'],
+      tip: 'End the sentence you are on instead of holding silence, then start fresh.',
     };
   } else if (m.longSentenceCount > 0 || m.fragmentCount >= 2) {
     retryFocus = {

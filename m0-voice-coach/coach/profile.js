@@ -15,18 +15,21 @@ const SKILLS = [
   { key: 'repeats', label: 'No restarts' },
   { key: 'structure', label: 'Complete sentences' },
   { key: 'substance', label: 'Full answers' },
+  { key: 'pauses', label: 'No hesitation pauses' },
 ];
 
 // Per-attempt skill verdicts from measured metrics only.
 // Returns { pace: true|false|null, ... } (null = not measurable).
 function skillVerdicts(m) {
-  if (!m) return { pace: null, fillers: null, repeats: null, structure: null, substance: null };
+  if (!m) return { pace: null, fillers: null, repeats: null, structure: null, substance: null, pauses: null };
   return {
     pace: m.wpm == null ? null : (m.wpm >= 100 && m.wpm <= 170),
     fillers: (m.fillerRatePer100 || 0) <= 3,
     repeats: (m.repeatCount || 0) === 0,
     structure: (m.fragmentCount || 0) === 0 && (m.longSentenceCount || 0) === 0,
     substance: (m.wordCount || 0) >= 20,
+    // Unknown (not bad) when no word timings existed for the attempt.
+    pauses: m.pausesMeasured ? (m.pauseCount || 0) === 0 : null,
   };
 }
 

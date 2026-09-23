@@ -96,6 +96,17 @@ models can be slow or temporarily unavailable; the fallback covers that too.
 
 - https://www.assemblyai.com/docs/streaming (quickstart, temp tokens, WebSocket API)
 
+## How deeply AssemblyAI is used
+
+- Universal-3.5 Pro Streaming over a single WebSocket (16 kHz mono PCM16,
+  fixed ~100 ms binary frames per the 50–1000 ms rule, real-time pacing).
+- Server-minted single-use tokens; the API key never reaches the browser.
+- Interim + finalized Turn handling with `turn_order` guards and clean
+  `Terminate` shutdowns.
+- **Word-level timings** from every final Turn drive measured hesitation-pause
+  detection (gaps ≥ 700 ms within a turn) — the only pause metric in the app,
+  and it comes from the API, not heuristics.
+
 ## Debate Coach (training partner, not sparring bot)
 
 Pick a motion + side, argue out loud round by round. After each round the

@@ -561,5 +561,44 @@ if (fail) process.exit(1);
   }
 
   console.log('EXPORT-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- hesitation pauses (AssemblyAI word timings) ----------
+  {
+    const w = (s, e) => ({ text: 'w', start: s, end: e });
+    const m = computeMetrics({
+      transcript: 'One two three four five six seven eight.',
+      durationMs: 3000, turnCount: 1,
+      words: [[w(0, 300), w(400, 700), w(2000, 2300), w(2400, 2700), w(5000, 5300), w(5400, 5700), w(7000, 7300), w(7400, 7700)]],
+    });
+    ok('pauses counted', m.pauseCount === 3, ' got ' + m.pauseCount);
+    ok('pauses longest', m.longestPauseMs === 2300, ' got ' + m.longestPauseMs);
+    ok('pauses measured flag', m.pausesMeasured === true, '');
+    const mEmpty = computeMetrics({ transcript: 'Hi there friend.', durationMs: 3000, turnCount: 1 });
+    ok('pauses unmeasured', mEmpty.pauseCount === 0 && mEmpty.pausesMeasured === false, '');
+    const mMessy = computeMetrics({
+      transcript: 'Hi.', durationMs: 2000, turnCount: 1,
+      words: [[w(900, 500), null, { text: 'x' }, w(0, 200)]],
+    });
+    ok('pauses messy input safe', mMessy.pauseCount === 0 && mMessy.pausesMeasured === true, '');
+    const pa = analyzeAttempt({ metrics: m });
+    ok('pauses area+focus', pa.areas_to_improve.some((t) => /hesitation pauses/.test(t)) && pa.retry_focus.targets.includes('pauses'), '');
+    const cleanM = computeMetrics({
+      transcript: 'Um, I finished the report before lunch today.',
+      durationMs: 6000, turnCount: 1,
+      words: [[w(0, 300), w(350, 600), w(650, 900), w(950, 1200), w(1250, 1500), w(1550, 1800), w(1850, 2100), w(2150, 2400)]],
+    });
+    const ca = analyzeAttempt({ metrics: cleanM });
+    ok('pauses strength', ca.strengths.some((t) => /No hesitation pauses/.test(t)), '');
+    const oldA = analyzeAttempt({ metrics: computeMetrics({ transcript: 'My name is Alex and I work.', durationMs: 8000, turnCount: 1 }) });
+    ok('pauses silent when unmeasured', !JSON.stringify(oldA).includes('hesitation pause'), '');
+    const cmpP = compareAttempts(
+      { ...oldA, metrics: { ...oldA.metrics, pauseCount: 3 } },
+      { ...ca, metrics: { ...cleanM, pauseCount: 0 } },
+      { focus: 'f', targets: ['pauses'], tip: 't' }
+    );
+    ok('pauses verdict+addressed', cmpP.improved.some((i) => i.metric === 'pauses') && cmpP.retry_focus_addressed === true, '');
+  }
+
+  console.log('PAUSE-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

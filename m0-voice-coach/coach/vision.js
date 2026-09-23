@@ -63,6 +63,7 @@ function slimMetrics(m) {
     repeats: m.repeatCount,
     sentences: m.sentenceCount,
     fragments: m.fragmentCount,
+    pauses: m.pausesMeasured ? { count: m.pauseCount, longestMs: m.longestPauseMs } : null,
   };
 }
 

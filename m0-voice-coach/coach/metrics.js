@@ -12,6 +12,32 @@ const FILLERS = [
   'you know', 'i mean', 'kind of', 'sort of', 'let me think',
 ];
 
+// A silence gap between two AssemblyAI word timings counts as a hesitation
+// pause at 700 ms+. Gaps are measured WITHIN one final turn only: cross-turn
+// silence includes endpointing delay, which is not the speaker pausing.
+const PAUSE_GAP_MS = 700;
+
+function pauseStats(wordGroups) {
+  let pauseCount = 0;
+  let longestPauseMs = 0;
+  let totalPauseMs = 0;
+  for (const group of wordGroups || []) {
+    if (!Array.isArray(group)) continue;
+    const words = group
+      .filter((w) => w && Number.isFinite(w.start) && Number.isFinite(w.end) && w.end >= w.start)
+      .sort((a, b) => a.start - b.start);
+    for (let i = 1; i < words.length; i++) {
+      const gap = words[i].start - words[i - 1].end;
+      if (gap >= PAUSE_GAP_MS) {
+        pauseCount++;
+        totalPauseMs += gap;
+        if (gap > longestPauseMs) longestPauseMs = gap;
+      }
+    }
+  }
+  return { pauseCount, longestPauseMs: Math.round(longestPauseMs), totalPauseSec: Math.round(totalPauseMs / 100) / 10 };
+}
+
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -32,12 +58,12 @@ function splitSentences(text) {
     }));
 }
 
-function computeMetrics({ transcript, durationMs, turnCount }) {
+function computeMetrics({ transcript, durationMs, turnCount, words }) {
   const text = (transcript || '').trim();
   const lower = text.toLowerCase();
   const rawTokens = text.split(/\s+/).filter(Boolean);
-  const words = rawTokens.map(stripPunct).filter(Boolean);
-  const wordCount = words.length;
+  const tokens = rawTokens.map(stripPunct).filter(Boolean);
+  const wordCount = tokens.length;
 
   const durationSec = durationMs > 0 ? durationMs / 1000 : 0;
   const wpm = durationSec > 0 && wordCount > 0 ? Math.round(wordCount / (durationSec / 60)) : null;
@@ -59,10 +85,10 @@ function computeMetrics({ transcript, durationMs, turnCount }) {
   // Consecutive repeated words ("I I", "the the") — a restart signal.
   let repeatCount = 0;
   const repeatExamples = [];
-  for (let i = 1; i < words.length; i++) {
-    if (words[i].toLowerCase() === words[i - 1].toLowerCase()) {
+  for (let i = 1; i < tokens.length; i++) {
+    if (tokens[i].toLowerCase() === tokens[i - 1].toLowerCase()) {
       repeatCount++;
-      if (repeatExamples.length < 3) repeatExamples.push(words[i - 1] + ' ' + words[i]);
+      if (repeatExamples.length < 3) repeatExamples.push(tokens[i - 1] + ' ' + tokens[i]);
     }
   }
 
@@ -78,6 +104,10 @@ function computeMetrics({ transcript, durationMs, turnCount }) {
 
   const safeTurnCount = Number.isFinite(turnCount) && turnCount > 0 ? Math.floor(turnCount) : 0;
   const avgWordsPerTurn = safeTurnCount > 0 ? Math.round((wordCount / safeTurnCount) * 10) / 10 : 0;
+
+  // Measured hesitation pauses from AssemblyAI word timings (not guessed).
+  const wordGroups = Array.isArray(words) ? words : [];
+  const pauses = pauseStats(wordGroups);
 
   return {
     durationSec: Math.round(durationSec * 10) / 10,
@@ -95,7 +125,13 @@ function computeMetrics({ transcript, durationMs, turnCount }) {
     hesitationCount,
     turnCount: safeTurnCount,
     avgWordsPerTurn,
+    pauseCount: pauses.pauseCount,
+    longestPauseMs: pauses.longestPauseMs,
+    totalPauseSec: pauses.totalPauseSec,
+    // False for old records without word timings: callers must not present
+    // pause verdicts as measured when no timing data existed.
+    pausesMeasured: wordGroups.length > 0,
   };
 }
 
-module.exports = { computeMetrics, FILLERS };
+module.exports = { computeMetrics, FILLERS, PAUSE_GAP_MS };

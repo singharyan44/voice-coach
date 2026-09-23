@@ -17,10 +17,14 @@ const SKILL_ISSUES = {
   repeats: 'Restarts',
   structure: 'Sentence structure',
   substance: 'Answer fullness',
+  pauses: 'Hesitation pauses',
 };
 
 function promptsFor(skillKey, excludeId) {
-  const tagged = PROMPTS.filter((p) => p.skills.includes(skillKey) && p.id !== excludeId);
+  // Pause control has no dedicated drill: pace drills (land each ending
+  // instead of stalling) train the same behavior.
+  const tagKey = skillKey === 'pauses' ? 'pace' : skillKey;
+  const tagged = PROMPTS.filter((p) => p.skills.includes(tagKey) && p.id !== excludeId);
   if (tagged.length === 0) return null;
   // Prefer focused drills (single-skill) over general exercises.
   const drills = tagged.filter((p) => p.skills.length === 1);

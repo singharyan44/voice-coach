@@ -115,6 +115,13 @@ function handleMessage(data) {
     const transcript = msg.transcript || '';
     const order = (typeof msg.turn_order === 'number') ? msg.turn_order : null;
     if (msg.end_of_turn) {
+      // Collect word timings for pause analysis (same acceptance rule as the
+      // recorder: only turns belonging to this attempt, never stale/idle).
+      if ((recorder.isRecording() || recorder.isFinishing()) &&
+          (order === null || order > recorder.maxIdleOrder) &&
+          Array.isArray(msg.words) && attemptWordGroups.length < 50) {
+        attemptWordGroups.push(msg.words.filter((w) => w && typeof w.start === 'number' && typeof w.end === 'number'));
+      }
       userBox.textContent = transcript;
       log('Final: ' + transcript);
       const done = recorder.onTurn({ text: transcript, final: true, order });
@@ -284,6 +291,8 @@ let attemptCount = 0;
 // server keeps no memory (serverless hosts). Sent back as `previous`.
 let lastAttempt = null;
 const recorder = new AttemptRecorder();
+// Per-final word-timing groups for pause analysis (reset each attempt).
+let attemptWordGroups = [];
 
 const promptTitleEl = document.getElementById('promptTitle');
 const promptObjectiveEl = document.getElementById('promptObjective');
@@ -686,6 +695,7 @@ startAttemptBtn.addEventListener('click', () => {
   if (typeof debateRecorder !== 'undefined') debateRecorder.resetToIdle();
   if (typeof interviewRecorder !== 'undefined') interviewRecorder.resetToIdle();
   attemptFrames = [captureFrame()].filter(Boolean);
+  attemptWordGroups = [];
   userBox.textContent = '';
   setAttemptState('Recording', true);
   attemptHintEl.textContent = 'Recording attempt ' + (attemptCount + 1) + ' — speak now, then press “Finish attempt”.';
@@ -724,7 +734,7 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     const res = await fetch('/api/sessions/' + sessionId + '/attempts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine, previous: lastAttempt, frames }),
+      body: JSON.stringify({ transcript, durationMs, turnCount, coachEngine, previous: lastAttempt, frames, words: attemptWordGroups }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || ('Attempt request returned ' + res.status));
@@ -812,6 +822,7 @@ function renderAnalysis(analysis, attempt, coachSource, requestedEngine) {
     '<span class="metric">' + m.fillerCount + ' fillers</span>' +
     '<span class="metric">' + m.repeatCount + ' repeats</span>' +
     '<span class="metric">' + m.sentenceCount + ' sentences</span>' +
+    (m.pausesMeasured ? '<span class="metric">' + m.pauseCount + ' pauses</span>' : '') +
     '</div>' +
     (analysis.strengths.length ? '<h3>Strengths</h3><ul>' + li(analysis.strengths) + '</ul>' : '') +
     (analysis.areas_to_improve.length ? '<h3>Work on</h3><ul>' + li(analysis.areas_to_improve) + '</ul>' : '') +

@@ -27,6 +27,7 @@ function inGoodRange(key, metrics) {
     case 'wpm': return metrics.wpm != null && metrics.wpm >= 100 && metrics.wpm <= 170;
     case 'repeatCount': return metrics.repeatCount === 0;
     case 'fragmentCount': return metrics.fragmentCount === 0;
+    case 'pauses': return (metrics.pauseCount || 0) === 0;
     case 'longSentenceCount': return metrics.longSentenceCount === 0;
     case 'wordCount': return metrics.wordCount >= 20;
     default: return false;
@@ -76,6 +77,11 @@ function compareAttempts(prevAnalysis, currAnalysis, prevRetryFocus) {
   if (c.repeatCount < p.repeatCount) verdict('repeatCount', 'improved', `Repeats dropped from ${p.repeatCount} to ${c.repeatCount}.`);
   else if (c.repeatCount > p.repeatCount) verdict('repeatCount', 'worse', `Repeats rose from ${p.repeatCount} to ${c.repeatCount}.`);
   else verdict('repeatCount', 'same', p.repeatCount === 0 ? 'Still zero repeated words.' : `Repeats unchanged at ${p.repeatCount}.`);
+
+  // Pauses: exact counts (small integers), any change counts.
+  if ((c.pauseCount || 0) < (p.pauseCount || 0)) verdict('pauses', 'improved', `Hesitation pauses dropped from ${p.pauseCount || 0} to ${c.pauseCount || 0}.`);
+  else if ((c.pauseCount || 0) > (p.pauseCount || 0)) verdict('pauses', 'worse', `Hesitation pauses rose from ${p.pauseCount || 0} to ${c.pauseCount || 0}.`);
+  else verdict('pauses', 'same', (p.pauseCount || 0) === 0 ? 'Still no hesitation pauses.' : `Pauses unchanged at ${p.pauseCount}.`);
 
   // Structure: fragments + long sentences combined.
   {

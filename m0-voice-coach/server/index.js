@@ -153,6 +153,7 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
     transcript,
     durationMs: Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : 0,
     turnCount: Number.isFinite(turnCount) && turnCount >= 0 ? turnCount : 0,
+    words: Array.isArray(req.body.words) ? req.body.words.slice(0, 50) : [],
   });
 
   // Retry context: prefer the client-sent previous (works across serverless
