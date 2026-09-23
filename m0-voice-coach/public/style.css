@@ -97,6 +97,46 @@ h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
   white-space: nowrap;
 }
 .state-pill.state-active { color: #22d3ee; border-color: rgba(34,211,238,0.5); }
+/* Polish batch: timers, pulse, motion, focus */
+.timer-pill {
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #0f172a;
+  background: #22d3ee;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+.timer-pill:empty { display: none; }
+@keyframes statePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,211,238,0.45); }
+  50% { box-shadow: 0 0 0 6px rgba(34,211,238,0); }
+}
+.state-pill.state-active { animation: statePulse 1.6s ease-in-out infinite; }
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.feedback, .thread-msg { animation: fadeSlideIn 0.25s ease-out; }
+.btn:focus-visible, button:focus-visible, select:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+}
+h1 {
+  background: linear-gradient(90deg, #e2e8f0 60%, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+h1 .mode-label { -webkit-text-fill-color: #22d3ee; }
+.panel { transition: border-color 0.2s ease; }
+.transcript-box:empty::before {
+  content: '…';
+  color: #475569;
+}
+#welcomePanel { border-color: rgba(34,211,238,0.25); }
+#cameraPreview { border-radius: 0.5rem; border: 1px solid rgba(255,255,255,0.08); margin-top: 0.5rem; }
 /* Coach Engine selector */
 .engine-row { align-items: center; }
 .engine-label { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; }

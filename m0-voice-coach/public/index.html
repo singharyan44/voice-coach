@@ -14,6 +14,7 @@
     <h1>Voice Coach <span class="mode-label">Speech Coach</span></h1>
     <p class="subtitle">Practice → Speak → Feedback → Retry → Improve</p>
     <p class="journey">Speak → Feedback → Retry → Targeted exercise → Debate → Profile</p>
+    <p id="statsLine" class="hint"></p>
 
     <section class="panel" id="welcomePanel" hidden>
       <h2>New here? 60-second start</h2>
@@ -55,7 +56,7 @@
     </section>
 
     <section class="panel">
-      <h2>Attempt <span id="attemptNum">1</span> <span id="attemptState" class="state-pill">Ready</span></h2>
+      <h2>Attempt <span id="attemptNum">1</span> <span id="attemptState" class="state-pill">Ready</span> <span id="attemptTimer" class="timer-pill"></span></h2>
       <div class="row engine-row">
         <span class="engine-label">Coach Engine</span>
         <label class="engine-option"><input type="radio" name="coachEngine" value="ai" checked> AI Coach</label>
@@ -85,7 +86,7 @@
 
     <div class="panels">
       <section class="panel">
-        <h2>Live transcript</h2>
+        <h2>Live transcript <span id="liveWords" class="hint"></span></h2>
         <div id="userTranscript" class="transcript-box"></div>
       </section>
       <section class="panel">
@@ -143,7 +144,7 @@
       </section>
 
       <section class="panel" id="debateArenaPanel" hidden>
-        <h2>Debate <span id="debateState" class="state-pill">Ready</span></h2>
+        <h2>Debate <span id="debateState" class="state-pill">Ready</span> <span id="debateTimer" class="timer-pill"></span></h2>
         <div id="debateThread"></div>
         <div class="row">
           <button id="roundStartBtn" class="btn btn-small">Speak argument</button>
@@ -183,7 +184,7 @@
       </section>
 
       <section class="panel" id="interviewArenaPanel" hidden>
-        <h2>Interview <span id="interviewState" class="state-pill">Ready</span></h2>
+        <h2>Interview <span id="interviewState" class="state-pill">Ready</span> <span id="interviewTimer" class="timer-pill"></span></h2>
         <div id="interviewThread"></div>
         <div class="row">
           <button id="answerStartBtn" class="btn btn-small">Speak answer</button>
@@ -210,6 +211,7 @@
 
   <script src="attempt-recorder.js"></script>
   <script src="export-text.js"></script>
+  <script src="stats.js"></script>
   <script src="script.js"></script>
   <script src="debate.js"></script>
   <script src="voice-debate.js"></script>

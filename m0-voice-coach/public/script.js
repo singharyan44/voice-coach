@@ -86,6 +86,7 @@ btn.addEventListener('click', async () => {
       setStatus('Disconnected', '#64748b');
       btn.textContent = 'Connect';
       btn.disabled = false;
+      stopTimer();
       cleanupAudio();
     });
 
@@ -115,6 +116,7 @@ function handleMessage(data) {
     const transcript = msg.transcript || '';
     const order = (typeof msg.turn_order === 'number') ? msg.turn_order : null;
     if (msg.end_of_turn) {
+      updateLiveWords(transcript);
       // Collect word timings for pause analysis (same acceptance rule as the
       // recorder: only turns belonging to this attempt, never stale/idle).
       if ((recorder.isRecording() || recorder.isFinishing()) &&
@@ -137,6 +139,7 @@ function handleMessage(data) {
       }
     } else {
       recorder.onTurn({ text: transcript, final: false, order });
+      updateLiveWords(transcript);
       if (typeof debateOnPartial === 'function') debateOnPartial(transcript, order);
       if (typeof interviewOnPartial === 'function') interviewOnPartial(transcript, order);
       userBox.textContent = transcript;
@@ -401,6 +404,31 @@ function captureFrame() {
   } catch (e) { return null; }
 }
 const healthLineEl = document.getElementById('healthLine');
+const statsLineEl = document.getElementById('statsLine');
+const attemptTimerEl = document.getElementById('attemptTimer');
+const liveWordsEl = document.getElementById('liveWords');
+let timerStop = null;
+
+function stopTimer() {
+  if (timerStop) { try { timerStop(); } catch (e) { /* ignore */ } timerStop = null; }
+  attemptTimerEl.textContent = '';
+}
+
+function updateLiveWords(text) {
+  const n = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  liveWordsEl.textContent = n > 0 ? n + ' words' : '';
+}
+
+function updateStats() {
+  try {
+    const s = dayStats(loadHistory());
+    const bits = ['Today: ' + s.todayCount + ' attempt' + (s.todayCount === 1 ? '' : 's')];
+    if (s.streak >= 2) bits.push(s.streak + '-day streak');
+    bits.push(s.totalCount + ' total');
+    if (s.totalMin > 0) bits.push(s.totalMin + ' min practiced');
+    statsLineEl.textContent = bits.join(' · ');
+  } catch (e) { /* ignore */ }
+}
 const sampleABtn = document.getElementById('sampleABtn');
 const sampleBBtn = document.getElementById('sampleBBtn');
 const sampleHintEl = document.getElementById('sampleHint');
@@ -698,6 +726,9 @@ startAttemptBtn.addEventListener('click', () => {
   if (typeof interviewRecorder !== 'undefined') interviewRecorder.resetToIdle();
   attemptFrames = [captureFrame()].filter(Boolean);
   attemptWordGroups = [];
+  liveWordsEl.textContent = '';
+  stopTimer();
+  timerStop = startElapsedTimer(attemptTimerEl, Date.now());
   userBox.textContent = '';
   setAttemptState('Recording', true);
   attemptHintEl.textContent = 'Recording attempt ' + (attemptCount + 1) + ' — speak now, then press “Finish attempt”.';
@@ -706,6 +737,7 @@ startAttemptBtn.addEventListener('click', () => {
 });
 
 finishAttemptBtn.addEventListener('click', () => {
+  stopTimer();
   const f = captureFrame();
   if (f) attemptFrames.push(f);
   const r = recorder.finish(Date.now());
@@ -769,6 +801,7 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     renderHistory(history);
     refreshProfile(history);
     refreshAssignment();
+    updateStats();
     attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
     if (data.comparison) {
       renderComparisonData(data.comparison);
@@ -875,3 +908,4 @@ updateSampleButtons();
 renderHistory(loadHistory());
 refreshProfile();
 refreshAssignment();
+updateStats();

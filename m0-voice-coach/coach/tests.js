@@ -19,6 +19,7 @@ const { opponentReply, diagnoseDebate } = require('./debate-llm');
 const { ROLES, getRole, validateQuestion, validateInterviewDiagnosis, stockFollowup, diagnoseInterviewRules } = require('./interview');
 const { interviewerNext, diagnoseInterview } = require('./interview-llm');
 const { buildVoiceOpponentPrompt } = require('./voice-opponent');
+const { formatElapsed, dayStats } = require('../public/stats');
 const { buildSessionText } = require('../public/export-text');
 const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
@@ -614,5 +615,25 @@ if (fail) process.exit(1);
   }
 
   console.log('VOICE-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- practice stats ----------
+  {
+    ok('stats format', formatElapsed(0) === '0:00' && formatElapsed(7000) === '0:07' && formatElapsed(65000) === '1:05' && formatElapsed(-500) === '0:00', '');
+    // Local-noon dates: immune to timezone edges on any machine.
+    const ld = (day) => new Date(2026, 8, day, 12, 0, 0).toISOString();
+    const s = dayStats([
+      { metrics: { durationSec: 60 }, createdAt: ld(20) },
+      { metrics: { durationSec: 120 }, createdAt: ld(21) },
+      { metrics: { durationSec: 30 }, createdAt: ld(22) },
+    ], new Date(2026, 8, 22, 23, 0, 0));
+    ok('stats streak', s.streak === 3 && s.todayCount === 1 && s.totalCount === 3 && s.totalMin === 3.5, JSON.stringify(s));
+    const s2 = dayStats([{ metrics: { durationSec: 10 }, createdAt: ld(20) }], new Date(2026, 8, 22, 12, 0, 0));
+    ok('stats broken streak', s2.streak === 0 && s2.todayCount === 0, '');
+    const s3 = dayStats([{ metrics: {}, createdAt: ld(22) }], new Date(2026, 8, 22, 12, 0, 0));
+    ok('stats missing metrics', s3.todayCount === 1 && s3.totalMin === 0, '');
+    ok('stats empty', dayStats([], new Date()).todayCount === 0, '');
+  }
+
+  console.log('STATS-RESULT pass=' + pass + ' fail=' + fail);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.log('FAIL llm harness crashed: ' + e.message); process.exit(1); });

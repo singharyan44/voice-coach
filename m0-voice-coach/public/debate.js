@@ -20,6 +20,13 @@ const roundFinishBtn = document.getElementById('roundFinishBtn');
 const diagnoseBtn = document.getElementById('diagnoseBtn');
 const rematchBtn = document.getElementById('rematchBtn');
 const debateHintEl = document.getElementById('debateHint');
+const debateTimerEl = document.getElementById('debateTimer');
+let debateTimerStop = null;
+
+function stopDebateTimer() {
+  if (debateTimerStop) { try { debateTimerStop(); } catch (e) { /* ignore */ } debateTimerStop = null; }
+  if (debateTimerEl) debateTimerEl.textContent = '';
+}
 const debateDiagnosisPanel = document.getElementById('debateDiagnosisPanel');
 const debateDiagnosisBox = document.getElementById('debateDiagnosisBox');
 const speechDrillBtn = document.getElementById('speechDrillBtn');
@@ -183,6 +190,8 @@ roundStartBtn.addEventListener('click', () => {
   debateRecorder.start(Date.now());
   if (typeof recorder !== 'undefined') recorder.resetToIdle();
   if (typeof interviewRecorder !== 'undefined') interviewRecorder.resetToIdle();
+  stopDebateTimer();
+  debateTimerStop = startElapsedTimer(debateTimerEl, Date.now());
   setDebateState('Recording', true);
   debateHintEl.textContent = 'Recording your argument — speak now, then “Finish round”.';
   updateDebateButtons();
@@ -190,6 +199,7 @@ roundStartBtn.addEventListener('click', () => {
 });
 
 roundFinishBtn.addEventListener('click', () => {
+  stopDebateTimer();
   const r = debateRecorder.finish(Date.now());
   updateDebateButtons();
   if (r.status === 'submitted') {
@@ -259,6 +269,7 @@ async function submitDebateRound({ transcript, turnCount, durationMs }) {
     });
     renderHistory(loadHistory());
     refreshProfile();
+    if (typeof updateStats === 'function') updateStats();
     appendThreadMsg('user', transcript, null);
     const meta = (data.weakestComponent ? 'attacked: ' + data.weakestComponent + ' · ' : '') +
       (data.source === 'llm' ? 'AI Coach' : (data.fallback ? 'Rules sparring — AI fallback' : 'Rules sparring'));

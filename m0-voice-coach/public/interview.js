@@ -21,6 +21,13 @@ const diagnoseInterviewBtn = document.getElementById('diagnoseInterviewBtn');
 const newInterviewBtn = document.getElementById('newInterviewBtn');
 const interviewSampleBtn = document.getElementById('interviewSampleBtn');
 const interviewHintEl = document.getElementById('interviewHint');
+const interviewTimerEl = document.getElementById('interviewTimer');
+let interviewTimerStop = null;
+
+function stopInterviewTimer() {
+  if (interviewTimerStop) { try { interviewTimerStop(); } catch (e) { /* ignore */ } interviewTimerStop = null; }
+  if (interviewTimerEl) interviewTimerEl.textContent = '';
+}
 const interviewSampleHintEl = document.getElementById('interviewSampleHint');
 const interviewVoiceBtn = document.getElementById('interviewVoiceBtn');
 let interviewVoiceOn = true;
@@ -136,6 +143,7 @@ async function fetchInterviewQuestion(lastAnswer, durationMs, turnCount) {
         });
         renderHistory(loadHistory());
         refreshProfile();
+        if (typeof updateStats === 'function') updateStats();
       }
       appendInterviewMsg('candidate', lastAnswer, null);
     }
@@ -161,6 +169,8 @@ answerStartBtn.addEventListener('click', () => {
   interviewRecorder.start(Date.now());
   if (typeof recorder !== 'undefined') recorder.resetToIdle();
   if (typeof debateRecorder !== 'undefined') debateRecorder.resetToIdle();
+  stopInterviewTimer();
+  interviewTimerStop = startElapsedTimer(interviewTimerEl, Date.now());
   setInterviewState('Recording', true);
   interviewHintEl.textContent = 'Recording your answer — speak now, then “Finish answer”.';
   updateInterviewButtons();
@@ -168,6 +178,7 @@ answerStartBtn.addEventListener('click', () => {
 });
 
 answerFinishBtn.addEventListener('click', () => {
+  stopInterviewTimer();
   const r = interviewRecorder.finish(Date.now());
   updateInterviewButtons();
   if (r.status === 'submitted') {
