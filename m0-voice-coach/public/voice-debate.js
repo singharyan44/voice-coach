@@ -15,6 +15,8 @@ let voiceTurnStart = 0;
 let voiceLastDeltaT = 0;
 let voiceLastActivity = 0;
 let voiceMode = false;
+let voiceOwnsMic = false;
+let voiceMicStream = null;
 
 function voiceOpponentMode() {
   const c = document.querySelector('input[name="opponentMode"]:checked');
@@ -89,6 +91,10 @@ async function startVoiceDebate(motionId, side) {
   voiceExchanges = [];
   voiceAnswers = [];
   voiceReady = false;
+  voiceTurnStart = 0;
+  voiceLastDeltaT = 0;
+  voiceLastActivity = 0;
+  voiceOwnsMic = false;
   debateMotion = { id: motionId, motion: motionText };
   debateSide = side;
   debateExchanges = [];
@@ -172,6 +178,8 @@ async function startVoiceAudio() {
     micStream = stream;
   } else {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: false } });
+    voiceOwnsMic = true;
+    voiceMicStream = micStream;
   }
   voiceSource = voiceCtx.createMediaStreamSource(micStream);
   voiceWorklet = new AudioWorkletNode(voiceCtx, 'voice-pcm');
@@ -188,14 +196,19 @@ async function startVoiceAudio() {
 function stopVoiceAudio() {
   try { voiceWorklet && voiceWorklet.disconnect(); } catch (e) { /* ignore */ }
   try { voiceSource && voiceSource.disconnect(); } catch (e) { /* ignore */ }
-  // NOTE: shared mic `stream` is owned by the streaming connection — never
-  // stop its tracks here.
+  // NOTE: the shared streaming mic `stream` is owned by that connection —
+  // only stop tracks for a mic this session opened itself.
+  if (voiceOwnsMic && voiceMicStream) {
+    try { voiceMicStream.getTracks().forEach((t) => t.stop()); } catch (e) { /* ignore */ }
+  }
   if (voiceCtx) voiceCtx.close().catch(() => {});
   voiceWorklet = null;
   voiceSource = null;
   voiceCtx = null;
   voiceReady = false;
   voicePlaybackTime = 0;
+  voiceOwnsMic = false;
+  voiceMicStream = null;
 }
 
 async function playVoiceReply(base64Data) {

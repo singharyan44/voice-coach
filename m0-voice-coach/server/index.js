@@ -183,7 +183,7 @@ app.post('/api/assign', (req, res) => {
 app.post('/api/sessions/:id/attempts', async (req, res) => {
   const session = getSession(req.params.id);
 
-  const transcript = ((req.body && req.body.transcript) || '').trim();
+  const transcript = (((req.body && req.body.transcript) || '').trim()).slice(0, 8000);
   if (!transcript) return res.status(400).json({ error: 'Empty transcript — speak before finishing the attempt.' });
 
   const durationMs = Number(req.body.durationMs);
@@ -200,8 +200,9 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
   const bodyPrev = req.body && req.body.previous;
   let prev = null;
   if (bodyPrev && typeof bodyPrev.transcript === 'string' && bodyPrev.transcript.trim() && bodyPrev.analysis && bodyPrev.metrics) {
+    const prevN = Number.isFinite(bodyPrev.n) ? Math.floor(bodyPrev.n) : 1;
     prev = {
-      n: Number.isFinite(bodyPrev.n) ? Math.floor(bodyPrev.n) : 1,
+      n: Math.min(1000, Math.max(1, prevN)),
       transcript: bodyPrev.transcript,
       metrics: bodyPrev.metrics,
       analysis: {
@@ -262,7 +263,7 @@ app.post('/api/sessions/:id/attempts', async (req, res) => {
   res.json({ attempt, analysis, coachSource, requestedEngine: routed.requested, comparison });
 });
 
-// ---------------- Debate Coach (stateless; same TrainingEngine loop) ----------------
+// ---------------- Speech attempts + comparison ----------------
 
 // Compare the last two attempts of a session.
 app.get('/api/sessions/:id/comparison', (req, res) => {
@@ -294,7 +295,7 @@ app.post('/api/debate/opponent', async (req, res) => {
   if (body.userSide !== 'for' && body.userSide !== 'against') {
     return res.status(400).json({ error: 'userSide must be "for" or "against".' });
   }
-  const transcript = (body.userTranscript || '').trim();
+  const transcript = (body.userTranscript || '').trim().slice(0, 8000);
   if (!transcript) return res.status(400).json({ error: 'Empty argument — speak before ending the round.' });
   const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
   // Delivery metrics for this spoken turn (powers diagnosis + history).
@@ -404,7 +405,7 @@ app.post('/api/interview/question', async (req, res) => {
   if (!role) return res.status(400).json({ error: 'Unknown role. Pick one from /api/interview/roles.' });
   const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
   const round = history.filter((h) => h.speaker === 'candidate').length;
-  const lastAnswer = typeof body.lastAnswer === 'string' && body.lastAnswer.trim() ? body.lastAnswer.trim() : null;
+  const lastAnswer = typeof body.lastAnswer === 'string' && body.lastAnswer.trim() ? body.lastAnswer.trim().slice(0, 8000) : null;
   // Delivery metrics for the just-finished answer (powers diagnosis + history).
   const ansMs = Number(body.durationMs);
   const ansTurns = Number(body.turnCount);
@@ -472,8 +473,7 @@ app.post('/api/interview/diagnose', async (req, res) => {
   res.json({ diagnosis, source, comparison });
 });
 
-function deliverySummary(delivery) {
-  const words = delivery.reduce((a, m) => a + (m.wordCount || 0), 0);
+function deliverySummary(delivery) {  const words = delivery.reduce((a, m) => a + (m.wordCount || 0), 0);
   const fillers = delivery.reduce((a, m) => a + (m.fillerCount || 0), 0);
   const repeats = delivery.reduce((a, m) => a + (m.repeatCount || 0), 0);
   return {
@@ -489,3 +489,8 @@ function deliverySummary(delivery) {
     turnCount: delivery.length,
   };
 }
+
+// Unknown API routes answer JSON (the client parses every API response).
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Unknown API endpoint: ' + req.path });
+});
