@@ -44,9 +44,9 @@ h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
   transition: transform 0.05s ease, box-shadow 0.2s ease;
   box-shadow: 0 4px 14px rgba(34,211,238,0.25);
 }
-.btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(34,211,238,0.35); }
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(34,211,238,0.35); }
 .btn:active { transform: translateY(0); }
-.btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; box-shadow: none; }
 .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1.5rem; }
 .panel { background: rgba(15,23,42,0.6); border: 1px solid rgba(255,255,255,0.05); border-radius: 0.75rem; padding: 1rem; }
 .panel h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.5rem; }
@@ -144,7 +144,7 @@ h1 .mode-label { -webkit-text-fill-color: #22d3ee; }
 .engine-option input { accent-color: #22d3ee; }
 .engine-option input:disabled + span, .engine-option:has(input:disabled) { opacity: 0.55; cursor: not-allowed; }
 /* Debate mode (additive) */
-#motionSelect {
+#motionSelect, #roleSelect {
   background: rgba(2,6,23,0.5);
   color: #e2e8f0;
   border: 1px solid rgba(255,255,255,0.1);
@@ -187,12 +187,17 @@ h1 .mode-label { -webkit-text-fill-color: #22d3ee; }
   .transcript-box { min-height: 90px; font-size: 0.9rem; }
   .log { max-height: 110px; }
 }
-#roleSelect {
-  background: rgba(2,6,23,0.5);
-  color: #e2e8f0;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 0.5rem;
-  padding: 0.45rem 0.6rem;
-  font-size: 0.9rem;
-  max-width: 100%;
+/* Final polish: collapsible log, reduced motion */
+.log-wrap { margin-top: 1.25rem; }
+.log-wrap summary {
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  padding: 0.25rem 0;
+  user-select: none;
+}
+.log-wrap summary::marker { color: #22d3ee; }
+.log-wrap .log { margin-top: 0.5rem; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
