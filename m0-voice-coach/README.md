@@ -1,11 +1,18 @@
-# Voice Coach M1
+# Voice Coach — adaptive communication training
 
-Milestone 1: the first real coaching loop —
-Prompt → Speak → Live transcript → Attempt → Analysis →
-Specific feedback → Retry → Comparison → Next focus.
+One training loop, three coaches: **Speech** (prompts → feedback → retry →
+comparison), **Debate** (argue → opponent attacks your weakest point →
+diagnose → rematch), **Interview** (adaptive interviewer → pressure rounds →
+diagnosis). The system tracks your profile across sessions and assigns the
+next exercise targeting your weakest skill.
 
-Transport (from M0, unchanged): browser mic → 16 kHz mono PCM16 →
-AssemblyAI Universal-3.5 Pro Streaming → interim/final Turn events.
+Loop: Challenge → Speak → Observe → Diagnose → Coach → Retry →
+Measure improvement → Adapt. See [ARCHITECTURE.md](../../ARCHITECTURE.md)
+and [DEMO.md](../../DEMO.md).
+
+Transport: browser mic → 16 kHz mono PCM16 → AssemblyAI Universal-3.5 Pro
+Streaming → interim/final Turn events (+ word timings, optional camera,
+optional spoken debate opponent via the Voice Agent API).
 
 ## Setup (no coding needed)
 
