@@ -39,5 +39,20 @@ function buildSessionText({ history, profile, generatedAt }) {
 }
 
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { buildSessionText };
+  module.exports = { buildSessionText, verdictSummary };
+}
+
+// Today's verdict from a comparison: counts + the bottleneck (first worse,
+// else first same, else null). Presentational grouping only — verdicts
+// themselves stay deterministic in coach/compare.js.
+function verdictSummary(comparison) {
+  const c = comparison || {};
+  const improved = Array.isArray(c.improved) ? c.improved : [];
+  const worse = Array.isArray(c.worse) ? c.worse : [];
+  const same = Array.isArray(c.same) ? c.same : [];
+  return {
+    improvedCount: improved.length,
+    worseCount: worse.length,
+    bottleneck: worse.length ? worse[0].detail : (same.length ? same[0].detail : null),
+  };
 }

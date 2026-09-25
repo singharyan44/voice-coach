@@ -20,7 +20,7 @@ const { ROLES, getRole, validateQuestion, validateInterviewDiagnosis, stockFollo
 const { interviewerNext, diagnoseInterview } = require('./interview-llm');
 const { buildVoiceOpponentPrompt } = require('./voice-opponent');
 const { formatElapsed, dayStats } = require('../public/stats');
-const { buildSessionText } = require('../public/export-text');
+const { buildSessionText, verdictSummary } = require('../public/export-text');
 const { analyzeWithVision, buildVisionMessages, validateVisionFeedback, getVisionConfig } = require('./vision');
 
 let pass = 0, fail = 0;
@@ -563,6 +563,22 @@ if (fail) process.exit(1);
   }
 
   console.log('EXPORT-RESULT pass=' + pass + ' fail=' + fail);
+
+  // ---------- verdict summary ----------
+  {
+    const v = verdictSummary({
+      improved: [{ metric: 'a', detail: 'x' }, { metric: 'b', detail: 'y' }],
+      same: [{ metric: 'c', detail: 'z' }],
+      worse: [{ metric: 'd', detail: 'w' }],
+    });
+    ok('verdict counts', v.improvedCount === 2 && v.worseCount === 1 && v.bottleneck === 'w', '');
+    const v2 = verdictSummary({ improved: [], same: [{ metric: 'c', detail: 'z' }], worse: [] });
+    ok('verdict no-worse fallback', v2.bottleneck === 'z', '');
+    const v3 = verdictSummary(null);
+    ok('verdict null-safe', v3.improvedCount === 0 && v3.bottleneck === null, '');
+  }
+
+  console.log('VERDICT-RESULT pass=' + pass + ' fail=' + fail);
 
   // ---------- hesitation pauses (AssemblyAI word timings) ----------
   {

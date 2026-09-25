@@ -70,6 +70,27 @@ h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
 .cmp-good { color: #4ade80; }
 .cmp-bad { color: #f87171; }
 .cmp-same { color: #cbd5e1; }
+/* Skill bars + replay quotes */
+.skill-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.3rem; font-size: 0.85rem; }
+.skill-name { flex: 0 0 130px; }
+.skill-bar { flex: 1; height: 8px; background: rgba(2,6,23,0.6); border-radius: 999px; overflow: hidden; }
+.skill-fill { display: block; height: 100%; border-radius: 999px; }
+.skill-fill.cmp-good { background: #4ade80; }
+.skill-fill.cmp-bad { background: #f87171; }
+.skill-fill.cmp-same { background: #94a3b8; }
+.replay { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.5rem; }
+.replay blockquote {
+  margin: 0;
+  padding: 0.5rem 0.65rem;
+  background: rgba(2,6,23,0.5);
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  border-left: 3px solid #94a3b8;
+}
+.replay blockquote.after { border-left-color: #4ade80; }
+.replay cite { display: block; font-style: normal; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 0.2rem; }
+@media (max-width: 640px) { .replay { grid-template-columns: 1fr; } .skill-name { flex-basis: 100px; } }
 /* M1 mode + attempt-state indicators (additive) */
 .mode-label {
   font-size: 0.7rem;

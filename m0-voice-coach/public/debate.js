@@ -6,6 +6,9 @@ let debateSide = 'for';
 let debateExchanges = [];
 let debateDelivery = [];
 let debateThinking = false;
+// What the opponent has identified so far: [{ round, claim, weakest }] —
+// rendered in the diagnosis so adaptation is visible, not just claimed.
+let debateOpponentReads = [];
 const debateRecorder = new AttemptRecorder();
 
 const motionSelect = document.getElementById('motionSelect');
@@ -169,6 +172,7 @@ debateStartBtn.addEventListener('click', () => {
   debateSide = debateSideValue();
   debateExchanges = [];
   debateDelivery = [];
+  debateOpponentReads = [];
   debateRecorder.resetToIdle();
   debateThread.innerHTML = '';
   debateDiagnosisPanel.hidden = true;
@@ -258,6 +262,13 @@ async function submitDebateRound({ transcript, turnCount, durationMs }) {
     debateExchanges.push({ speaker: 'user', text: transcript });
     debateExchanges.push({ speaker: 'opponent', text: data.attack });
     debateDelivery.push(data.metrics);
+    if (data.argument && data.argument.claim) {
+      debateOpponentReads.push({
+        round: debateExchanges.filter((e) => e.speaker === 'user').length,
+        claim: data.argument.claim,
+        weakest: data.weakestComponent || null,
+      });
+    }
     saveAttemptToHistory({
       promptTitle: 'Debate: ' + debateMotion.motion,
       transcript,
@@ -331,6 +342,9 @@ function renderDebateDiagnosis(d, source) {
     '<span class="metric">' + (sc.claims_supported || 0) + ' supported</span>' +
     '<span class="metric">' + (sc.rebuttals_addressed || 0) + ' rebuttals answered</span>' +
     '</div>' +
+    (debateOpponentReads.length ? '<h3>What the opponent tracked</h3><ul>' + debateOpponentReads.map((r) =>
+      '<li>Round ' + r.round + ' — attacked your <strong>' + escapeHtml(r.weakest || 'argument') + '</strong>: “' +
+      escapeHtml(r.claim.length > 120 ? r.claim.slice(0, 120) + '…' : r.claim) + '”</li>').join('') + '</ul>' : '') +
     (d.strengths.length ? '<h3>Strengths</h3><ul>' + li(d.strengths) + '</ul>' : '') +
     (d.areas_to_improve.length ? '<h3>Work on</h3><ul>' + li(d.areas_to_improve) + '</ul>' : '') +
     (d.actionable_feedback.length ? '<h3>Do next time</h3><ul>' + li(d.actionable_feedback) + '</ul>' : '') +
@@ -349,6 +363,7 @@ rematchBtn.addEventListener('click', () => {
   document.querySelector('input[name="debateSide"][value="' + debateSide + '"]').checked = true;
   debateExchanges = [];
   debateDelivery = [];
+  debateOpponentReads = [];
   debateRecorder.resetToIdle();
   debateThread.innerHTML = '';
   debateDiagnosisPanel.hidden = true;

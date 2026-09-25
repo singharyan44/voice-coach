@@ -295,6 +295,9 @@ let attemptCount = 0;
 // Last completed attempt, kept client-side so retries work even when the
 // server keeps no memory (serverless hosts). Sent back as `previous`.
 let lastAttempt = null;
+// Transcripts for the before/after replay (previous overwritten on submit).
+let replayPrev = null;
+let replayCurr = null;
 const recorder = new AttemptRecorder();
 // Per-final word-timing groups for pause analysis (reset each attempt).
 let attemptWordGroups = [];
@@ -438,7 +441,7 @@ const historyBox = document.getElementById('historyBox');
 const assignPanel = document.getElementById('assignPanel');
 const assignTitleEl = document.getElementById('assignTitle');
 const assignObjectiveEl = document.getElementById('assignObjective');
-const assignReasonEl = document.getElementById('assignReason');
+const assignReasonEl = document.getElementById('assignReasonText');
 const practiceAssignedBtn = document.getElementById('practiceAssignedBtn');
 let assignedPrompt = null;
 
@@ -530,7 +533,15 @@ async function refreshProfile(history) {
 }
 
 function renderProfile(p) {
-  const skillLine = (s) => '<li>' + escapeHtml(s.label) + ' <span class="hint">' + s.good + '/' + s.total + '</span></li>';
+  const measured = p.skills.filter((s) => s.status !== 'unknown');
+  const bar = (s) => {
+    const pct = s.total > 0 ? Math.round((s.good / s.total) * 100) : 0;
+    const cls = s.status === 'strength' ? 'cmp-good' : s.status === 'weakness' ? 'cmp-bad' : 'cmp-same';
+    const tag = s.status === 'strength' ? 'Strong' : s.status === 'weakness' ? 'Focus' : 'Developing';
+    return '<div class="skill-row"><span class="skill-name">' + escapeHtml(s.label) + '</span>' +
+      '<span class="skill-bar"><span class="skill-fill ' + cls + '" style="width:' + pct + '%"></span></span>' +
+      '<span class="hint">' + tag + ' ' + s.good + '/' + s.total + '</span></div>';
+  };
   const first = p.trends[0], last = p.trends[p.trends.length - 1];
   const trendLine = (label, a, b, suffix) => (a == null || b == null) ? '' :
     '<span class="metric">' + label + ' ' + a + ' → ' + b + (suffix || '') + '</span>';
@@ -539,8 +550,7 @@ function renderProfile(p) {
     trendLine('pace', first && first.wpm, last && last.wpm, ' wpm') +
     trendLine('fillers', first && first.fillerRatePer100, last && last.fillerRatePer100, '/100w') +
     '</div>' +
-    (p.strengths.length ? '<h3>Strengths</h3><ul>' + p.strengths.map(skillLine).join('') + '</ul>' : '') +
-    (p.recurringWeaknesses.length ? '<h3>Recurring weaknesses</h3><ul>' + p.recurringWeaknesses.map(skillLine).join('') + '</ul>' : '') +
+    (measured.length ? '<h3>Skill levels (share of attempts rated good)</h3>' + measured.map(bar).join('') : '') +
     (p.topFocus ? '<div class="retry-focus"><strong>Training focus:</strong> ' + escapeHtml(p.topFocus.target) +
       ' <span class="hint">(flagged ' + p.topFocus.times + '×)</span></div>' : '') +
     '</div>';
@@ -774,6 +784,8 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     if (!res.ok) throw new Error(data.error || ('Attempt request returned ' + res.status));
     attemptCount = data.attempt.n;
     attemptNumEl.textContent = String(attemptCount + 1);
+    replayPrev = lastAttempt ? lastAttempt.transcript : null;
+    replayCurr = transcript;
     lastAttempt = {
       n: data.attempt.n,
       transcript,
@@ -800,7 +812,7 @@ async function submitFinishedAttempt({ transcript, turnCount, durationMs }) {
     });
     renderHistory(history);
     refreshProfile(history);
-    refreshAssignment();
+    await refreshAssignment();
     updateStats();
     attemptHintEl.textContent = 'Feedback is ready. Press “Try again” for attempt ' + (attemptCount + 1) + '.';
     if (data.comparison) {
@@ -891,7 +903,20 @@ function renderComparisonData(data) {
       : data.retry_focus_addressed
         ? '<p class="cmp-good"><strong>Yes — you addressed the previous retry focus.</strong></p>'
         : '<p class="cmp-bad"><strong>Not yet — the previous retry focus still needs work.</strong></p>';
-    comparisonBox.innerHTML = '<div class="feedback">' + focusVerdict +
+    const quote = (t) => escapeHtml(t && t.length > 220 ? t.slice(0, 220) + '…' : (t || ''));
+    const replayHtml = (replayPrev && replayCurr)
+      ? '<div class="replay"><blockquote><cite>Attempt ' + (attemptCount - 1) + '</cite>' + quote(replayPrev) + '</blockquote>' +
+        '<blockquote class="after"><cite>Attempt ' + attemptCount + '</cite>' + quote(replayCurr) + '</blockquote></div>'
+      : '';
+    const v = verdictSummary(data);
+    const nextDrill = (typeof assignedPrompt !== 'undefined' && assignedPrompt)
+      ? 'Next up: <strong>' + escapeHtml(assignedPrompt.title) + '</strong> — see your Up-next card.'
+      : 'See your Up-next card for the assigned drill.';
+    const verdictHtml = '<div class="retry-focus"><strong>Today’s verdict:</strong> ' +
+      escapeHtml(v.improvedCount + ' area' + (v.improvedCount === 1 ? '' : 's') + ' improved' + (v.worseCount ? ', ' + v.worseCount + ' slipped' : '') + '.') +
+      (v.bottleneck ? '<br>Remaining bottleneck: ' + escapeHtml(v.bottleneck) : '') +
+      '<br>' + nextDrill + '</div>';
+    comparisonBox.innerHTML = '<div class="feedback">' + replayHtml + verdictHtml + focusVerdict +
       sec('Improved', data.improved, 'cmp-good') +
       sec('Stayed the same', data.same, 'cmp-same') +
       sec('Got worse', data.worse, 'cmp-bad') +
